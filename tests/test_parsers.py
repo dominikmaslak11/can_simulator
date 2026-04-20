@@ -4,18 +4,20 @@ import os
 from parsers import parse_candump_line, parse_log_line, load_frames_from_file
 
 
-def test_parse_candump_line_valid():
-    line = "(1776425664.880567) can0 0C00004C#0001000000030200"
+def test_parse_candump_line_standard():
+    """Ramka z ID < 0x800 jest standardowa."""
+    line = "(1776425664.880567) can0 07E8#0001000000030200"
     result = parse_candump_line(line)
     assert result is not None
     ts, can_id, data, is_ext = result
     assert ts == 1776425664.880567
-    assert can_id == 0x0C00004C
+    assert can_id == 0x07E8
     assert data.hex().upper() == "0001000000030200"
     assert is_ext is False
 
 
 def test_parse_candump_line_extended():
+    """Ramka z ID > 0x7FF jest rozszerzona."""
     line = "(1776425664.885561) can0 1CFF66F0#11007530753000DD"
     result = parse_candump_line(line)
     assert result is not None
@@ -27,7 +29,7 @@ def test_parse_candump_line_extended():
 def test_parse_candump_line_invalid():
     assert parse_candump_line("invalid line") is None
     assert parse_candump_line("") is None
-    assert parse_candump_line("(123) can0 123#ZZ") is None  # niepoprawny hex
+    assert parse_candump_line("(123) can0 123#ZZ") is None
 
 
 def test_parse_log_line_valid():
@@ -37,7 +39,7 @@ def test_parse_log_line_valid():
     can_id, data, is_ext = result
     assert can_id == 0x0C00008F
     assert data.hex().upper() == "0101"
-    assert is_ext is True
+    assert is_ext is True   # 0x0C00008F > 0x7FF
 
 
 def test_parse_log_line_invalid():
@@ -46,7 +48,7 @@ def test_parse_log_line_invalid():
 
 
 def test_load_frames_from_file():
-    content = """(1776425664.880567) can0 0C00004C#0001000000030200
+    content = """(1776425664.880567) can0 07E8#0001000000030200
 (1776425664.885561) can0 1CFF66F0#11007530753000DD
 Wysłano: 0C00008F#0101
 """
@@ -57,8 +59,8 @@ Wysłano: 0C00008F#0101
     try:
         frames = load_frames_from_file(temp_path)
         assert len(frames) == 3
-        # Pierwsza ramka (standardowa)
-        assert frames[0][0] == 0x0C00004C
+        # Pierwsza ramka (standardowa 0x7E8 < 0x800)
+        assert frames[0][0] == 0x07E8
         assert not frames[0][2]
         # Druga ramka (rozszerzona)
         assert frames[1][0] == 0x1CFF66F0

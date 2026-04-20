@@ -7,10 +7,8 @@ class TestCyclicDetector:
     def test_alert_detection_and_regular_period(self):
         detector = CyclicDetector(alert_id=0x123, expected_period=1.0, tolerance=0.2)
         now = 1000.0
-        # Pierwsza ramka alertu
         assert not detector.feed_frame(0x123, b'', False, now)
         assert detector.alert_active
-        # Druga ramka w oczekiwanym oknie
         now += 1.0
         assert not detector.feed_frame(0x123, b'', False, now)
         assert detector.alert_active
@@ -19,9 +17,7 @@ class TestCyclicDetector:
         detector = CyclicDetector(alert_id=0x123, expected_period=1.0, tolerance=0.2)
         now = 1000.0
         detector.feed_frame(0x123, b'', False, now)
-        # Brak alertu przez > 1.2 s
         now += 1.3
-        # Wysłanie innej ramki powinno wywołać dezaktywację
         deactivated = detector.feed_frame(0x456, b'', False, now)
         assert deactivated
         assert not detector.alert_active
@@ -30,11 +26,9 @@ class TestCyclicDetector:
         detector = CyclicDetector(alert_id=0x123, expected_period=1.0, tolerance=0.1)
         now = 1000.0
         detector.feed_frame(0x123, b'', False, now)
-        # W granicach tolerancji
         now += 1.09
         assert not detector.feed_frame(0x123, b'', False, now)
         assert detector.alert_active
-        # Poza tolerancją – dezaktywacja
         now += 1.2
         deactivated = detector.feed_frame(0x456, b'', False, now)
         assert deactivated
@@ -47,16 +41,16 @@ class TestCyclicDetector:
         detector.feed_frame(0x200, b'2', True, now)       # kandydat
         now += 0.1
         detector.feed_frame(0x300, b'3', False, now)      # kandydat
-        now += 0.3  # brak alertu, powinna być dezaktywacja przy następnej ramce
-        now += 0.1
+        now += 0.7  # czas poza tolerancją – następna ramka wywoła dezaktywację
         deactivated = detector.feed_frame(0x400, b'4', True, now)
         assert deactivated
 
-        candidates = detector.get_candidate_window(window_before=0.3)
-        # Powinny być dwie ramki: 0x200 i 0x300 (wysłane 0.2 i 0.1 s przed dezaktywacją)
-        assert len(candidates) == 2
+        # Okno 0.9 s – powinno objąć wszystkie trzy ramki (0x200, 0x300, 0x400)
+        candidates = detector.get_candidate_window(window_before=0.9)
+        assert len(candidates) == 3
         assert candidates[0][0] == 0x200
         assert candidates[1][0] == 0x300
+        assert candidates[2][0] == 0x400
 
     def test_reset(self):
         detector = CyclicDetector(alert_id=0x123, expected_period=1.0)
