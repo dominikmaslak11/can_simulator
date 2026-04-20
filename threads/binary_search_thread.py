@@ -40,6 +40,14 @@ class BinarySearchThread(threading.Thread):
         self.detector = None
         self.hunt_paused = False
         self.deactivation_callback = None
+        self.start_index = 0
+        self.playback_thread = None
+        self.listen_thread = None
+
+        # Pola dla RL
+        self.rl_agent = None
+        self.rl_total_frames = 0
+        self.rl_episode_frames_played = 0
 
     def log(self, msg):
         logger.info(msg)
@@ -56,18 +64,37 @@ class BinarySearchThread(threading.Thread):
         self.running = True
         self._save_state("start")
 
-    def setup_hunting(self, frames, interval, alert_id, period=1.0, tolerance=0.2):
+    def setup_hunting(self, frames, interval, alert_id, period=1.0, tolerance=0.2, start_index=0):
         self.frames = frames
         self.interval = interval
         self.mode = 'hunt_deactivator'
         self.alert_id = alert_id
         self.alert_period = period
         self.alert_tolerance = tolerance
-        self.left = 0
+        self.start_index = max(0, min(start_index, len(frames) - 1))
+        self.left = self.start_index
         self.right = len(frames) - 1
         self.running = True
         self.detector = CyclicDetector(alert_id, period, tolerance)
-        self.log(f"Tryb polowania: ID=0x{alert_id:08X}, okres={period}s, tolerancja={tolerance}")
+        self.log(f"Tryb polowania: ID=0x{alert_id:08X}, okres={period}s, tolerancja={tolerance}, start_idx={self.start_index}")
+
+    def setup_rl_hunting(self, frames, interval, alert_id, period=1.0, tolerance=0.2, start_index=0):
+        self.frames = frames
+        self.interval = interval
+        self.mode = 'rl_hunt'
+        self.alert_id = alert_id
+        self.alert_period = period
+        self.alert_tolerance = tolerance
+        self.start_index = max(0, min(start_index, len(frames) - 1))
+        self.left = self.start_index
+        self.right = len(frames) - 1
+        self.rl_total_frames = len(frames)
+        self.running = True
+        self.detector = CyclicDetector(alert_id, period, tolerance)
+        if self.rl_agent is None:
+            from rl_agent import RLAgent
+            self.rl_agent = RLAgent()
+        self.log(f"Tryb RL-polowania: ID=0x{alert_id:08X}, start_idx={self.start_index}")
 
     def _save_state(self, action="step"):
         state = {
@@ -106,7 +133,9 @@ class BinarySearchThread(threading.Thread):
         return False
 
     def run(self):
-        if self.mode == 'hunt_deactivator':
+        if self.mode == 'rl_hunt':
+            self._run_rl_hunting()
+        elif self.mode == 'hunt_deactivator':
             self._run_hunting()
         elif self.mode in ('find_start', 'find_end'):
             self._run_binary()
@@ -120,7 +149,7 @@ class BinarySearchThread(threading.Thread):
 
     def _run_hunting(self):
         self.log("=== Rozpoczynanie polowania na dezaktywator ===")
-        idx = 0
+        idx = self.start_index
         self.detector.reset()
         while self.running:
             if self.hunt_paused:
@@ -128,7 +157,7 @@ class BinarySearchThread(threading.Thread):
                 continue
 
             if idx >= len(self.frames):
-                idx = 0
+                idx = self.start_index
                 self.detector.reset()
                 self.log("--- Zapętlenie pliku ---")
 
@@ -141,7 +170,7 @@ class BinarySearchThread(threading.Thread):
 
             if deactivated:
                 self.log("!!! Wykryto dezaktywację alertu !!!")
-                candidates = self.detector.get_candidate_window(window_before=0.5)
+                candidates = self.detector.get_candidate_window(window_before=1.0)
                 self.log(f"Znaleziono {len(candidates)} ramek w oknie przed dezaktywacją.")
                 if self.deactivation_callback:
                     self.deactivation_callback(candidates)
@@ -151,6 +180,50 @@ class BinarySearchThread(threading.Thread):
             time.sleep(self.interval)
 
         self.log("Polowanie zakończone.")
+
+    def _run_rl_hunting(self):
+        self.log("=== Rozpoczynanie polowania z RL ===")
+        idx = self.start_index
+        self.detector.reset()
+        self.rl_episode_frames_played = 0
+
+        while self.running:
+            if self.hunt_paused:
+                time.sleep(0.1)
+                continue
+
+            if idx >= len(self.frames):
+                idx = self.start_index
+                self.detector.reset()
+                self.log("--- Zapętlenie pliku ---")
+
+            can_id, data, is_ext = self.frames[idx]
+            success, msg = self.can.send_frame(can_id, data, is_ext)
+            self.log(msg)
+            self.rl_episode_frames_played += 1
+
+            now = time.time()
+            deactivated = self.detector.feed_frame(can_id, data, is_ext, now)
+
+            if deactivated:
+                self.log(f"!!! Dezaktywacja po {self.rl_episode_frames_played} ramkach !!!")
+                candidates = self.detector.get_candidate_window(window_before=1.0)
+                # Nagroda: im szybciej znaleziono, tym lepiej
+                reward = 1.0 / max(1, self.rl_episode_frames_played)
+                action = self.rl_agent.choose_action(self.start_index, self.rl_total_frames)
+                new_start = max(0, min(self.rl_total_frames - 1, self.start_index + action))
+                self.rl_agent.update(reward, new_start, self.rl_total_frames)
+                self.rl_agent.save()
+                self.log(f"RL: akcja={action}, nagroda={reward:.4f}, nowy start={new_start}")
+                self.start_index = new_start
+                if self.deactivation_callback:
+                    self.deactivation_callback(candidates)
+                break
+
+            idx += 1
+            time.sleep(self.interval)
+
+        self.log("Polowanie RL zakończone.")
 
     def _run_binary(self):
         while self.running and self.left <= self.right:

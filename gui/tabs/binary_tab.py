@@ -1,6 +1,7 @@
 import tkinter as tk
-from tkinter import ttk, filedialog, messagebox, simpledialog
+from tkinter import ttk, filedialog, messagebox
 from parsers import load_frames_from_file
+
 
 def setup_binary_tab(app, tab):
     frame = ttk.Frame(tab, padding=10)
@@ -27,6 +28,7 @@ def setup_binary_tab(app, tab):
     ttk.Radiobutton(mode_frame, text="Koniec zjawiska", variable=mode_var, value="find_end").pack(side=tk.LEFT, padx=5)
     ttk.Radiobutton(mode_frame, text="Ręczny podział na części", variable=mode_var, value="manual_parts").pack(side=tk.LEFT, padx=5)
     ttk.Radiobutton(mode_frame, text="Automatyczne polowanie", variable=mode_var, value="hunt_deactivator").pack(side=tk.LEFT, padx=5)
+    ttk.Radiobutton(mode_frame, text="Polowanie z RL", variable=mode_var, value="rl_hunt").pack(side=tk.LEFT, padx=5)
 
     # Ramka dla parametrów polowania (ukrywana, gdy niepotrzebna)
     hunt_frame = ttk.LabelFrame(frame, text="Parametry polowania", padding=5)
@@ -40,14 +42,15 @@ def setup_binary_tab(app, tab):
     ttk.Label(hunt_frame, text="Tolerancja (±):").grid(row=1, column=0, sticky=tk.W)
     tolerance_var = tk.DoubleVar(value=0.2)
     ttk.Spinbox(hunt_frame, from_=0.0, to=1.0, increment=0.05, textvariable=tolerance_var, width=10).grid(row=1, column=1)
+    ttk.Label(hunt_frame, text="Start (indeks):").grid(row=1, column=2, sticky=tk.W)
+    start_index_var = tk.IntVar(value=0)
+    ttk.Spinbox(hunt_frame, from_=0, to=999999, textvariable=start_index_var, width=10).grid(row=1, column=3)
 
-    # Ukrywanie/pokazywanie parametrów polowania
     def on_mode_change(*args):
-        if mode_var.get() == 'hunt_deactivator':
+        if mode_var.get() in ('hunt_deactivator', 'rl_hunt'):
             hunt_frame.grid()
         else:
             hunt_frame.grid_remove()
-        # Stan przycisku "Liczba części"
         if mode_var.get() == 'manual_parts':
             parts_spin.config(state='normal')
         else:
@@ -82,7 +85,6 @@ def setup_binary_tab(app, tab):
     undo_btn.pack(side=tk.LEFT, padx=5)
     ttk.Button(btn_frame, text="Reset", command=lambda: reset_binary_search(app)).pack(side=tk.LEFT, padx=5)
 
-    # Przypisanie zmiennych do obiektu app
     app.binary_file_var = file_var
     app.binary_info = info_label
     app.binary_interval = interval_var
@@ -98,19 +100,21 @@ def setup_binary_tab(app, tab):
     app.hunt_alert_id = alert_id_var
     app.hunt_period = period_var
     app.hunt_tolerance = tolerance_var
+    app.hunt_start_index = start_index_var
 
     start_btn.config(command=app.start_binary_search)
     yes_btn.config(command=app.binary_answer_yes)
     no_btn.config(command=app.binary_answer_no)
     stop_btn.config(command=app.stop_binary_search)
 
-    # Inicjalne ukrycie
     on_mode_change()
+
 
 def browse_binary_file(file_var):
     path = filedialog.askopenfilename(filetypes=[("Logi", "*.txt *.log"), ("Wszystkie", "*.*")])
     if path:
         file_var.set(path)
+
 
 def load_binary_file(app, file_var, info_label, start_btn):
     path = file_var.get()
@@ -126,6 +130,7 @@ def load_binary_file(app, file_var, info_label, start_btn):
     except Exception as e:
         messagebox.showerror("Błąd", f"Nie udało się wczytać pliku: {e}")
 
+
 def reset_binary_search(app):
     if app.binary_thread:
         app.binary_thread.stop()
@@ -137,6 +142,7 @@ def reset_binary_search(app):
     app.binary_progress.config(text="Zakres: --")
     app._redraw_binary_progress()
     app.log("[Binary] Reset.")
+
 
 def undo_binary_search(app):
     if app.binary_thread:
