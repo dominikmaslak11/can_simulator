@@ -1,0 +1,12 @@
+┌──(nz2xzhkzfeewkgbu㉿y5enjsya4t4pv4fn)-[/run/…/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator]
+└─$ git add .
+git commit -m "Dodano kompletny interfejs GUI z trybem automatycznego polowania"
+git push
+fatal: to nie jest repozytorium gita (ani żaden katalog nadrzędny aż do punktu montowania /run/media/nz2xzhkzfeewkgbu)
+Zatrzymano na granicy systemu plików (nie ustawiono GIT_DISCOVERY_ACROSS_FILESYSTEM).
+fatal: to nie jest repozytorium gita (ani żaden katalog nadrzędny aż do punktu montowania /run/media/nz2xzhkzfeewkgbu)
+Zatrzymano na granicy systemu plików (nie ustawiono GIT_DISCOVERY_ACROSS_FILESYSTEM).
+fatal: to nie jest repozytorium gita (ani żaden katalog nadrzędny aż do punktu montowania /run/media/nz2xzhkzfeewkgbu)
+Zatrzymano na granicy systemu plików (nie ustawiono GIT_DISCOVERY_ACROSS_FILESYSTEM).
+                                                                                                              
+┌──(nz2xzhkzfeewkgbu㉿y5enjsya4t4pv4fn)-[/run/…/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator]
