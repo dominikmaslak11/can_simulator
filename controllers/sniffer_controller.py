@@ -5,6 +5,13 @@ import threading
 import time
 import tkinter as tk
 
+try:
+    import cantools
+    CANTTOOLS_AVAILABLE = True
+except ImportError:
+    CANTTOOLS_AVAILABLE = False
+
+
 class SnifferController(BaseController):
     def __init__(self, app):
         super().__init__(app)
@@ -19,9 +26,18 @@ class SnifferController(BaseController):
         self.overwrite_active = False
         self.bit_view_active = False
         self.keep_alive_timeout = 2.0
-        self.alive_items = {}
-        self.overwrite_items = {}
+        self.alive_items = {}                # item -> (can_id, last_timestamp)
+        self.overwrite_items = {}            # can_id -> item
+        self.dbc_db = None                   # obiekt bazy danych cantools
+        self.dbc_decoding_active = False
 
+        # Definicje kolumn – rozszerzamy o 'decoded' gdy DBC aktywny
+        self.columns_normal_base = ('timestamp', 'id', 'ext', 'dlc', 'data')
+        self.columns_bit_base = ('timestamp', 'id', 'ext', 'dlc', 'bits')
+
+    # ----------------------------------------------------------------------
+    # Zarządzanie trybami wyświetlania
+    # ----------------------------------------------------------------------
     def toggle_keep_alive(self):
         self.keep_alive_active = self.app.sniffer_keep_alive_var.get()
         if self.keep_alive_active:
@@ -43,35 +59,140 @@ class SnifferController(BaseController):
     def toggle_bit_view(self):
         self.bit_view_active = self.app.sniffer_bit_view_var.get()
         tree = self.app.sniffer_tree
+        self._configure_columns()   # przebudowuje kolumny
 
         if self.bit_view_active:
-            tree['columns'] = self.app.sniffer_columns_bit
-            tree.heading('bits', text='Bity')
-            tree.column('bits', width=600)
-
             for item in tree.get_children():
                 values = tree.item(item, 'values')
                 if len(values) >= 5:
                     data_hex = values[4]
                     bits_str = self._hex_to_bits(data_hex)
                     new_values = (values[0], values[1], values[2], values[3], bits_str)
+                    if len(values) == 6:
+                        new_values += (values[5],)
                     tree.item(item, values=new_values)
-                    # Reset kolorów
                     tree.item(item, tags=())
         else:
-            tree['columns'] = self.app.sniffer_columns_normal
-            tree.heading('data', text='Dane (hex)')
-            tree.column('data', width=300)
-
             for item in tree.get_children():
                 values = tree.item(item, 'values')
                 if len(values) >= 5:
                     bits_str = values[4]
                     data_hex = self._bits_to_hex(bits_str)
                     new_values = (values[0], values[1], values[2], values[3], data_hex)
+                    if len(values) == 6:
+                        new_values += (values[5],)
                     tree.item(item, values=new_values)
                     tree.item(item, tags=())
 
+    # ----------------------------------------------------------------------
+    # Obsługa DBC
+    # ----------------------------------------------------------------------
+    def load_dbc_file(self):
+        if not CANTTOOLS_AVAILABLE:
+            messagebox.showerror("Błąd", "Biblioteka 'cantools' nie jest zainstalowana.")
+            return
+        filepath = filedialog.askopenfilename(
+            title="Wybierz plik DBC",
+            filetypes=[("Pliki DBC", "*.dbc"), ("Wszystkie pliki", "*.*")]
+        )
+        if not filepath:
+            return
+        try:
+            self.dbc_db = cantools.database.load_file(filepath)
+            self.dbc_decoding_active = True
+            self.app.sniffer_dbc_status.config(text=f"DBC: {filepath.split('/')[-1]}")
+            self.log(f"[Sniffer] Wczytano plik DBC: {filepath}")
+            self._configure_columns()
+            # Odśwież widok – przelicz dekodowanie dla istniejących wierszy
+            self._refresh_decoded_column()
+        except Exception as e:
+            messagebox.showerror("Błąd", f"Nie udało się wczytać pliku DBC:\n{e}")
+
+    def unload_dbc(self):
+        self.dbc_db = None
+        self.dbc_decoding_active = False
+        self.app.sniffer_dbc_status.config(text="Brak DBC")
+        self._configure_columns()
+        self.log("[Sniffer] Wyłączono dekodowanie DBC")
+
+    def toggle_dbc(self):
+        if self.dbc_decoding_active:
+            self.unload_dbc()
+        else:
+            self.load_dbc_file()
+
+    def _configure_columns(self):
+        """Ustawia kolumny Treeview w zależności od trybu bitowego i DBC."""
+        tree = self.app.sniffer_tree
+        base = self.columns_bit_base if self.bit_view_active else self.columns_normal_base
+        if self.dbc_decoding_active:
+            columns = base + ('decoded',)
+        else:
+            columns = base
+
+        tree['columns'] = columns
+        tree.heading('timestamp', text='Czas')
+        tree.heading('id', text='ID')
+        tree.heading('ext', text='EXT')
+        tree.heading('dlc', text='DLC')
+        if self.bit_view_active:
+            tree.heading('bits', text='Bity')
+            tree.column('bits', width=600)
+        else:
+            tree.heading('data', text='Dane (hex)')
+            tree.column('data', width=300)
+
+        if self.dbc_decoding_active:
+            tree.heading('decoded', text='Zdekodowane')
+            tree.column('decoded', width=300)
+
+    def _refresh_decoded_column(self):
+        """Przelicza i aktualizuje kolumnę 'decoded' dla wszystkich wierszy."""
+        tree = self.app.sniffer_tree
+        for item in tree.get_children():
+            values = tree.item(item, 'values')
+            if len(values) >= 4:
+                # ID jest w drugiej kolumnie (index 1) w formacie 0x...
+                id_str = values[1]
+                try:
+                    can_id = int(id_str, 16)
+                except ValueError:
+                    continue
+                # Dane są w kolumnie 4 (data lub bits)
+                raw_val = values[4]
+                if self.bit_view_active:
+                    data_hex = self._bits_to_hex(raw_val)
+                else:
+                    data_hex = raw_val
+                try:
+                    data = bytes.fromhex(data_hex)
+                except ValueError:
+                    continue
+                decoded_str = self._decode_frame(can_id, data)
+                new_values = values[:5] + (decoded_str or "",)
+                if len(values) == 6:
+                    # już była kolumna decoded – nadpisujemy
+                    pass
+                tree.item(item, values=new_values)
+
+    def _decode_frame(self, can_id, data):
+        if not self.dbc_decoding_active or self.dbc_db is None:
+            return None
+        try:
+            message = self.dbc_db.get_message_by_frame_id(can_id)
+            decoded = message.decode(data)
+            parts = []
+            for sig_name, value in decoded.items():
+                sig = message.get_signal_by_name(sig_name)
+                unit = sig.unit if sig.unit else ""
+                parts.append(f"{sig_name}: {value}{unit}".strip())
+            return ", ".join(parts) if parts else ""
+        except Exception:
+            return None
+
+    # ----------------------------------------------------------------------
+    # Narzędzia konwersji
+    # ----------------------------------------------------------------------
     def _hex_to_bits(self, hex_str):
         try:
             data = bytes.fromhex(hex_str)
@@ -95,6 +216,9 @@ class SnifferController(BaseController):
         except:
             return ''
 
+    # ----------------------------------------------------------------------
+    # Timer dla trybu keep-alive
+    # ----------------------------------------------------------------------
     def _start_keep_alive_timer(self):
         def check_alive():
             if not self.keep_alive_active:
@@ -108,6 +232,9 @@ class SnifferController(BaseController):
             self.app.root.after(1000, check_alive)
         self.app.root.after(1000, check_alive)
 
+    # ----------------------------------------------------------------------
+    # Główne metody sniffera
+    # ----------------------------------------------------------------------
     def start_sniffer(self):
         if not self.app.can.connected:
             messagebox.showerror("Błąd", "Połącz się z CAN")
@@ -153,8 +280,7 @@ class SnifferController(BaseController):
                 for i in range(len(children) - 1000):
                     tree.delete(children[i])
 
-        # Konfiguracja tagu dla zmienionych bitów
-        tree.tag_configure('changed', background='#FFB6C1')  # jasnoczerwony
+        tree.tag_configure('changed', background='#FFB6C1')
 
         for ts, can_id, data, is_ext in frames:
             if filter_active and can_id not in filter_ids:
@@ -164,13 +290,17 @@ class SnifferController(BaseController):
             dlc = len(data)
             data_hex = data.hex().upper()
             bits_str = self._hex_to_bits(data_hex)
+            decoded_str = self._decode_frame(can_id, data)
 
-            # Określenie tagów (kolorowanie)
             tags = ()
             if self.bit_view_active:
                 last_bits = self.app.sniffer_last_bits.get(can_id)
                 if last_bits is not None and last_bits != bits_str:
                     tags = ('changed',)
+
+            display_value = bits_str if self.bit_view_active else data_hex
+            base_values = (timestamp, f"0x{can_id:08X}", ext_str, dlc, display_value)
+            values = base_values + (decoded_str or "",) if self.dbc_decoding_active else base_values
 
             if self.keep_alive_active:
                 item_to_update = None
@@ -178,15 +308,14 @@ class SnifferController(BaseController):
                     if cid == can_id:
                         item_to_update = item
                         break
-                display_value = bits_str if self.bit_view_active else data_hex
                 if item_to_update:
-                    tree.item(item_to_update, values=(timestamp, f"0x{can_id:08X}", ext_str, dlc, display_value))
+                    tree.item(item_to_update, values=values)
                     tree.tag_configure('alive', foreground='black')
                     final_tags = ('alive',) + tags
                     tree.item(item_to_update, tags=final_tags)
                     self.alive_items[item_to_update] = (can_id, ts)
                 else:
-                    item = tree.insert("", tk.END, values=(timestamp, f"0x{can_id:08X}", ext_str, dlc, display_value))
+                    item = tree.insert("", tk.END, values=values)
                     tree.tag_configure('alive', foreground='black')
                     final_tags = ('alive',) + tags
                     tree.item(item, tags=final_tags)
@@ -198,19 +327,17 @@ class SnifferController(BaseController):
                     self.app.sniffer_last_data[can_id] = data_hex
 
             elif self.overwrite_active:
-                display_value = bits_str if self.bit_view_active else data_hex
                 if can_id in self.overwrite_items:
                     item = self.overwrite_items[can_id]
-                    tree.item(item, values=(timestamp, f"0x{can_id:08X}", ext_str, dlc, display_value))
+                    tree.item(item, values=values)
                     tree.item(item, tags=tags)
                 else:
-                    item = tree.insert("", tk.END, values=(timestamp, f"0x{can_id:08X}", ext_str, dlc, display_value))
+                    item = tree.insert("", tk.END, values=values)
                     self.overwrite_items[can_id] = item
                     tree.item(item, tags=tags)
 
             else:
-                display_value = bits_str if self.bit_view_active else data_hex
-                item = tree.insert("", tk.END, values=(timestamp, f"0x{can_id:08X}", ext_str, dlc, display_value))
+                item = tree.insert("", tk.END, values=values)
                 tree.item(item, tags=tags)
                 if self.bit_view_active:
                     self.app.sniffer_last_bits[can_id] = bits_str
@@ -235,9 +362,9 @@ class SnifferController(BaseController):
                 if self.bit_view_active:
                     bits_str = values[4]
                     data_hex = self._bits_to_hex(bits_str)
-                    f.write(f"{values[0]} can0 {values[1]}#{data_hex}\n")
                 else:
-                    f.write(f"{values[0]} can0 {values[1]}#{values[4]}\n")
+                    data_hex = values[4]
+                f.write(f"{values[0]} can0 {values[1]}#{data_hex}\n")
         self.log(f"[Sniffer] Wyeksportowano do {filepath}")
 
     def toggle_filter(self):
