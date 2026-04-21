@@ -1,32 +1,12 @@
 [
   {
-    "timestamp": "2026-04-21T07:18:32.094178",
+    "timestamp": "2026-04-21T10:22:00.031317",
     "action": "start",
-    "mode": "find_start",
+    "mode": "manual_parts",
     "left": 0,
-    "right": 9,
+    "right": 5876,
     "mid": 0,
-    "total_frames": 10,
-    "num_parts": null
-  },
-  {
-    "timestamp": "2026-04-21T07:18:32.138254",
-    "action": "after_answer",
-    "mode": "find_start",
-    "left": 0,
-    "right": 3,
-    "mid": 4,
-    "total_frames": 10,
-    "num_parts": null
-  },
-  {
-    "timestamp": "2026-04-21T07:18:32.148740",
-    "action": "after_answer",
-    "mode": "find_start",
-    "left": 0,
-    "right": 0,
-    "mid": 1,
-    "total_frames": 10,
-    "num_parts": null
+    "total_frames": 5877,
+    "num_parts": 13
   }
 ]

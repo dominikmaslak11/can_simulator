@@ -1,37 +1,25 @@
 import tkinter as tk
-from tkinter import ttk, scrolledtext, messagebox, filedialog
-import logging
+from tkinter import ttk, scrolledtext, messagebox, simpledialog
+from datetime import datetime
 import threading
 import time
-from datetime import datetime
+import logging
 
-# Interfejsy CAN
-from socketcan_interface import SocketCANInterface
-from dummy_interface import DummyInterface
-
-# Zakładki i mixiny
+from can_interface import CanInterface
+from threads import SimulationThread, BinarySearchThread
 from gui.tabs import replay_tab, missing_tab, error_tab, step_tab, manual_tab, binary_tab, wizard_tab
-from gui.handlers import ConnectionHandlers
-from gui.simulation_handlers import SimulationHandlers
-from gui.binary_handlers import BinaryHandlers
-from gui.wizard_handlers import WizardHandlers
-
-# Nowe komponenty
-from sequence_analyzer import SequenceAnalyzer
-from session_manager import SessionManager
-from report_generator import ReportGenerator
+from gui.utils import write_log_to_file
 
 logger = logging.getLogger("App")
 
 
-class CanSimulatorApp(ConnectionHandlers, SimulationHandlers, BinaryHandlers, WizardHandlers):
+class CanSimulatorApp:
     def __init__(self, root):
         self.root = root
         self.root.title("CAN Simulator GUI")
         self.root.geometry("1000x850")
 
-        # Interfejs CAN tworzony dynamicznie przy połączeniu
-        self.can = None
+        self.can = CanInterface()
         self.sim_thread = None
         self.binary_thread = None
         self.loaded_frames = []
@@ -42,11 +30,14 @@ class CanSimulatorApp(ConnectionHandlers, SimulationHandlers, BinaryHandlers, Wi
         self.manual_cyclic_active = False
         self.manual_cyclic_thread = None
 
-        # Analizator sekwencji (używany w BinaryHandlers)
-        self.seq_analyzer = SequenceAnalyzer()
+        # Atrybuty dla kreatora wyszukiwania
+        self.wizard_frames = []                     # lista wczytanych ramek
+        self.wizard_id_frame = tk.StringVar()       # ID szukanej ramki
+        self.wizard_data_frame = tk.StringVar()     # dane szukanej ramki
+        self.wizard_is_extended = tk.BooleanVar(value=False)
+        self.wizard_search_mode = tk.StringVar(value="single")
 
         self._create_widgets()
-        self._create_menu()
         logger.info("Interfejs GUI utworzony")
 
     def log(self, msg):
@@ -61,11 +52,10 @@ class CanSimulatorApp(ConnectionHandlers, SimulationHandlers, BinaryHandlers, Wi
         if hasattr(self, 'replay_log_enable') and self.replay_log_enable.get():
             log_path = self.replay_log_var.get()
             if log_path:
-                from gui.utils import write_log_to_file
                 write_log_to_file(log_path, msg)
 
     def _create_widgets(self):
-        # --- Ramka połączenia CAN ---
+        # Połączenie CAN
         frame_conn = ttk.LabelFrame(self.root, text="Połączenie CAN", padding=5)
         frame_conn.pack(fill=tk.X, padx=10, pady=5)
 
@@ -74,18 +64,13 @@ class CanSimulatorApp(ConnectionHandlers, SimulationHandlers, BinaryHandlers, Wi
         self.entry_iface.insert(0, "can0")
         self.entry_iface.grid(row=0, column=1, padx=5)
 
-        # Checkbox trybu offline
-        self.offline_mode = tk.BooleanVar(value=False)
-        ttk.Checkbutton(frame_conn, text="Tryb offline (bez CAN)", variable=self.offline_mode).grid(
-            row=0, column=2, padx=5)
-
         self.btn_connect = ttk.Button(frame_conn, text="Połącz", command=self.toggle_connection)
-        self.btn_connect.grid(row=0, column=3, padx=5)
+        self.btn_connect.grid(row=0, column=2, padx=5)
 
         self.lbl_status = ttk.Label(frame_conn, text="Niepołączony", foreground="red")
-        self.lbl_status.grid(row=0, column=4, padx=10)
+        self.lbl_status.grid(row=0, column=3, padx=10)
 
-        # --- Zakładki ---
+        # Zakładki
         self.notebook = ttk.Notebook(self.root)
         self.notebook.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
 
@@ -114,10 +99,10 @@ class CanSimulatorApp(ConnectionHandlers, SimulationHandlers, BinaryHandlers, Wi
         binary_tab.setup_binary_tab(self, self.tab_binary)
 
         self.tab_wizard = ttk.Frame(self.notebook)
-        self.notebook.add(self.tab_wizard, text="Kreator")
+        self.notebook.add(self.tab_wizard, text="Kreator wyszukiwania")
         wizard_tab.setup_wizard_tab(self, self.tab_wizard)
 
-        # --- Log ---
+        # Log
         frame_log = ttk.LabelFrame(self.root, text="Log", padding=5)
         frame_log.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
         self.log_text = scrolledtext.ScrolledText(frame_log, height=12, state='disabled')
@@ -126,23 +111,8 @@ class CanSimulatorApp(ConnectionHandlers, SimulationHandlers, BinaryHandlers, Wi
         self.status_var = tk.StringVar(value="Gotowy.")
         ttk.Label(self.root, textvariable=self.status_var, relief=tk.SUNKEN).pack(fill=tk.X, padx=10, pady=2)
 
-    def _create_menu(self):
-        """Tworzy górne menu Plik."""
-        menubar = tk.Menu(self.root)
-        self.root.config(menu=menubar)
-
-        file_menu = tk.Menu(menubar, tearoff=0)
-        menubar.add_cascade(label="Plik", menu=file_menu)
-        file_menu.add_command(label="Zapisz sesję jako...", command=self.save_session)
-        file_menu.add_command(label="Wczytaj sesję...", command=self.load_session)
-        file_menu.add_separator()
-        file_menu.add_command(label="Generuj raport...", command=self.generate_report)
-        file_menu.add_separator()
-        file_menu.add_command(label="Wyjście", command=self.on_closing)
-
     def toggle_connection(self):
-        """Nadpisuje metodę z ConnectionHandlers, aby używała dynamicznego interfejsu."""
-        if self.can and self.can.connected:
+        if self.can.connected:
             self.can.disconnect()
             self.lbl_status.config(text="Niepołączony", foreground="red")
             self.btn_connect.config(text="Połącz")
@@ -152,13 +122,6 @@ class CanSimulatorApp(ConnectionHandlers, SimulationHandlers, BinaryHandlers, Wi
             if not iface:
                 messagebox.showerror("Błąd", "Podaj nazwę interfejsu")
                 return
-
-            # Wybór odpowiedniej implementacji interfejsu CAN
-            if self.offline_mode.get():
-                self.can = DummyInterface(iface)
-            else:
-                self.can = SocketCANInterface(iface)
-
             success, msg = self.can.connect()
             if success:
                 self.lbl_status.config(text=f"Połączony: {iface}", foreground="green")
@@ -168,186 +131,270 @@ class CanSimulatorApp(ConnectionHandlers, SimulationHandlers, BinaryHandlers, Wi
             else:
                 messagebox.showerror("Błąd", msg)
 
-    # ----------------------------------------------------------------------
-    # Zarządzanie sesjami
-    # ----------------------------------------------------------------------
-    def save_session(self):
-        """Zapisuje stan aplikacji do pliku .cansession."""
-        if not self.loaded_frames and not self.binary_frames:
-            messagebox.showinfo("Brak danych", "Brak wczytanych ramek do zapisania.")
+    def _set_buttons_state(self, state):
+        buttons = [
+            self.replay_start_btn, self.missing_start_btn, self.error_start_btn,
+            self.manual_send_once_btn, self.manual_start_btn, self.binary_start_btn
+        ]
+        for btn in buttons:
+            btn.config(state=state)
+
+        if state == 'disabled':
+            disable_buttons = [
+                self.replay_pause_btn, self.replay_stop_btn, self.manual_stop_btn,
+                self.binary_yes_btn, self.binary_no_btn, self.binary_stop_btn, self.binary_undo_btn
+            ]
+            for btn in disable_buttons:
+                btn.config(state=state)
+
+    def _update_step_preview(self):
+        if self.step_frames and self.step_idx < len(self.step_frames):
+            cid, data, is_ext = self.step_frames[self.step_idx]
+            ext_str = " (EXT)" if is_ext else ""
+            self.step_preview.config(text=f"Następna: ID=0x{cid:08X}{ext_str} Data={data.hex().upper()}")
+        else:
+            self.step_preview.config(text="Koniec listy")
+
+    def step_next(self):
+        if not self.step_frames or self.step_idx >= len(self.step_frames):
+            messagebox.showinfo("Koniec", "Wszystkie ramki zostały wysłane")
             return
-        filepath = filedialog.asksaveasfilename(
-            defaultextension=".cansession",
-            filetypes=[("Pliki sesji CAN Simulator", "*.cansession"), ("Wszystkie pliki", "*.*")]
+        if not self.can.connected:
+            messagebox.showerror("Błąd", "Połącz się z CAN")
+            return
+        cid, data, is_ext = self.step_frames[self.step_idx]
+        success, msg = self.can.send_frame(cid, data, is_ext)
+        self.log(msg)
+        self.step_idx += 1
+        self.step_progress.config(text=f"{self.step_idx} / {len(self.step_frames)}")
+        self._update_step_preview()
+
+    def start_replay(self):
+        if not self.loaded_frames:
+            messagebox.showerror("Błąd", "Najpierw wczytaj plik")
+            return
+        self._start_sim()
+        self.sim_thread.setup_replay(
+            self.loaded_frames,
+            self.replay_interval.get(),
+            self.replay_loop.get(),
+            self.replay_speed.get()
         )
-        if not filepath:
-            return
+        self.sim_thread.start()
+        self._simulation_started()
 
-        state = {
-            "replay": {
-                "file_path": self.replay_file_var.get(),
-                "interval": self.replay_interval.get(),
-                "speed": self.replay_speed.get(),
-                "loop": self.replay_loop.get(),
-                "log_enable": self.replay_log_enable.get(),
-                "log_path": self.replay_log_var.get(),
-            },
-            "binary": {
-                "file_path": self.binary_file_var.get(),
-                "interval": self.binary_interval.get(),
-                "mode": self.binary_mode.get(),
-                "parts": self.binary_parts.get(),
-                "hunt_alert_id": self.hunt_alert_id.get(),
-                "hunt_period": self.hunt_period.get(),
-                "hunt_tolerance": self.hunt_tolerance.get(),
-                "hunt_start_index": self.hunt_start_index.get(),
-            },
-            "frames": {
-                "loaded": [(cid, data.hex(), is_ext) for (cid, data, is_ext) in self.loaded_frames],
-                "binary": [(cid, data.hex(), is_ext) for (cid, data, is_ext) in self.binary_frames],
-            },
-            "history": {
-                "binary_history": getattr(self.binary_thread, 'history', []) if self.binary_thread else []
-            }
-        }
-        SessionManager.save_session(filepath, state)
-        self.log(f"Sesja zapisana do {filepath}")
-        messagebox.showinfo("Sesja zapisana", f"Sesja została zapisana do:\n{filepath}")
-
-    def load_session(self):
-        """Wczytuje stan aplikacji z pliku .cansession."""
-        filepath = filedialog.askopenfilename(
-            filetypes=[("Pliki sesji CAN Simulator", "*.cansession"), ("Wszystkie pliki", "*.*")]
+    def start_missing(self):
+        self._start_sim()
+        self.sim_thread.setup_missing_module(
+            self.missing_8f.get(),
+            self.missing_diag.get(),
+            self.missing_spor.get()
         )
-        if not filepath:
-            return
-        state = SessionManager.load_session(filepath)
-        if state is None:
-            messagebox.showerror("Błąd", "Nie udało się wczytać pliku sesji.")
-            return
+        self.sim_thread.mode = 'missing'
+        self.sim_thread.start()
+        self._simulation_started()
 
+    def start_error(self):
+        self._start_sim()
         try:
-            # Przywracanie stanu odtwarzania
-            r = state.get("replay", {})
-            self.replay_file_var.set(r.get("file_path", ""))
-            self.replay_interval.set(r.get("interval", 0.5))
-            self.replay_speed.set(r.get("speed", 1.0))
-            self.replay_loop.set(r.get("loop", True))
-            self.replay_log_enable.set(r.get("log_enable", False))
-            self.replay_log_var.set(r.get("log_path", ""))
+            code = int(self.error_code.get().strip(), 16)
+        except ValueError:
+            code = 0x19
+        self.sim_thread.setup_error_frames(self.error_interval.get(), code)
+        self.sim_thread.mode = 'error'
+        self.sim_thread.start()
+        self._simulation_started()
 
-            # Przywracanie stanu wyszukiwania binarnego
-            b = state.get("binary", {})
-            self.binary_file_var.set(b.get("file_path", ""))
-            self.binary_interval.set(b.get("interval", 0.1))
-            self.binary_mode.set(b.get("mode", "find_start"))
-            self.binary_parts.set(b.get("parts", 2))
-            self.hunt_alert_id.set(b.get("hunt_alert_id", "0C00008F"))
-            self.hunt_period.set(b.get("hunt_period", 1.0))
-            self.hunt_tolerance.set(b.get("hunt_tolerance", 0.2))
-            self.hunt_start_index.set(b.get("hunt_start_index", 0))
+    def _start_sim(self):
+        if self.sim_thread and self.sim_thread.is_alive():
+            self.sim_thread.stop()
+            self.sim_thread.join(timeout=0.5)
+        self.sim_thread = SimulationThread(self.can, self.log)
 
-            # Przywracanie wczytanych ramek
-            frames_data = state.get("frames", {})
-            loaded = frames_data.get("loaded", [])
-            if loaded:
-                self.loaded_frames = [(cid, bytes.fromhex(data), is_ext) for (cid, data, is_ext) in loaded]
-                self.replay_info.config(text=f"Wczytano {len(self.loaded_frames)} ramek (z sesji)")
-            binary_frames = frames_data.get("binary", [])
-            if binary_frames:
-                self.binary_frames = [(cid, bytes.fromhex(data), is_ext) for (cid, data, is_ext) in binary_frames]
-                self.binary_info.config(text=f"Wczytano {len(self.binary_frames)} ramek (z sesji)")
-                self.binary_start_btn.config(state='normal')
-                self._redraw_binary_progress()
+    def _simulation_started(self):
+        self.replay_start_btn.config(text="Wznów", state='normal')
+        self.replay_pause_btn.config(state='normal')
+        self.replay_stop_btn.config(state='normal')
 
-            # Historia wyszukiwania
-            hist = state.get("history", {}).get("binary_history", [])
-            if self.binary_thread:
-                self.binary_thread.history = hist
-            elif hist:
-                from threads import BinarySearchThread
-                self.binary_thread = BinarySearchThread(self.can, self.log, None, lambda: None)
-                self.binary_thread.history = hist
+    def pause_sim(self):
+        if self.sim_thread:
+            self.sim_thread.pause()
+            self.replay_start_btn.config(text="Wznów", state='normal')
+            self.log("Pauza")
 
-            self.log(f"Sesja wczytana z {filepath}")
-            messagebox.showinfo("Sesja wczytana", f"Sesja została wczytana z:\n{filepath}")
-        except Exception as e:
-            messagebox.showerror("Błąd", f"Nie udało się wczytać sesji: {e}")
+    def stop_sim(self):
+        if self.sim_thread:
+            self.sim_thread.stop()
+            self.log("Zatrzymano")
+        self.replay_start_btn.config(text="Start", state='normal')
+        self.replay_pause_btn.config(state='disabled')
+        self.replay_stop_btn.config(state='disabled')
 
-    def use_in_simulation(self, can_id, data, is_extended):
-        """Wypełnia pola w zakładce Symulacja modułu / Ręczne wysyłanie."""
-        self.manual_id.set(f"{can_id:08X}")
-        self.manual_data.set(data.hex().upper())
-        self.manual_extended.set(is_extended)
-        self.notebook.select(self.tab_manual)
-        self.log(f"Przekazano ID=0x{can_id:08X} do symulacji.")
-
-    def quick_test_alert(self, can_id, data, is_extended, period=1.0, duration=10.0):
-        """
-        Uruchamia krótki test wysyłania ramki przez określony czas.
-        """
-        if not self.can or not self.can.connected:
-            messagebox.showerror("Błąd", "Połącz się z CAN przed testem.")
+    # ---------- Ręczne wysyłanie ----------
+    def manual_send_once(self):
+        if not self.can.connected:
+            messagebox.showerror("Błąd", "Połącz się z CAN")
             return
-
-        def _test_worker():
-            self.log(f"[Test alertu] Rozpoczęto wysyłanie ID=0x{can_id:08X} co {period}s przez {duration}s")
-            end_time = time.time() + duration
-            while time.time() < end_time:
-                success, msg = self.can.send_frame(can_id, data, is_extended)
-                if success:
-                    self.log(f"[Test alertu] {msg}")
-                else:
-                    self.log(f"[Test alertu] Błąd: {msg}")
-                    break
-                time.sleep(period)
-            self.log("[Test alertu] Zakończono.")
-
-        threading.Thread(target=_test_worker, daemon=True).start()
-
-    def generate_report(self):
-        """Generuje raport z bieżącej sesji i zapisuje do pliku."""
-        state = {
-            "replay": {
-                "file_path": self.replay_file_var.get(),
-                "interval": self.replay_interval.get(),
-                "speed": self.replay_speed.get(),
-                "loop": self.replay_loop.get(),
-            },
-            "binary": {
-                "file_path": self.binary_file_var.get(),
-                "interval": self.binary_interval.get(),
-                "mode": self.binary_mode.get(),
-                "hunt_alert_id": self.hunt_alert_id.get(),
-                "hunt_period": self.hunt_period.get(),
-                "hunt_tolerance": self.hunt_tolerance.get(),
-                "hunt_start_index": self.hunt_start_index.get(),
-            },
-            "frames": {
-                "loaded": [(cid, data.hex(), is_ext) for (cid, data, is_ext) in self.loaded_frames],
-                "binary": [(cid, data.hex(), is_ext) for (cid, data, is_ext) in self.binary_frames],
-            },
-            "history": {
-                "binary_history": getattr(self.binary_thread, 'history', []) if self.binary_thread else []
-            }
-        }
-
-        report_text = ReportGenerator.generate(state)
-
-        filepath = filedialog.asksaveasfilename(
-            defaultextension=".txt",
-            filetypes=[("Pliki tekstowe", "*.txt"), ("Wszystkie pliki", "*.*")]
-        )
-        if not filepath:
-            return
-
         try:
-            with open(filepath, 'w', encoding='utf-8') as f:
-                f.write(report_text)
-            self.log(f"Raport zapisany do {filepath}")
-            messagebox.showinfo("Raport zapisany", f"Raport został zapisany do:\n{filepath}")
-        except Exception as e:
-            messagebox.showerror("Błąd", f"Nie udało się zapisać raportu: {e}")
+            can_id = int(self.manual_id.get().strip(), 16)
+            data = bytes.fromhex(self.manual_data.get().strip())
+        except ValueError:
+            messagebox.showerror("Błąd", "Nieprawidłowy format ID lub danych")
+            return
+        success, msg = self.can.send_frame(can_id, data, self.manual_extended.get())
+        self.log(msg)
+
+    def manual_start_cyclic(self):
+        if not self.can.connected:
+            messagebox.showerror("Błąd", "Połącz się z CAN")
+            return
+        try:
+            can_id = int(self.manual_id.get().strip(), 16)
+            data = bytes.fromhex(self.manual_data.get().strip())
+        except ValueError:
+            messagebox.showerror("Błąd", "Nieprawidłowy format")
+            return
+        interval = self.manual_interval.get()
+        if interval <= 0:
+            messagebox.showerror("Błąd", "Interwał musi być > 0")
+            return
+
+        self.manual_cyclic_active = True
+        self.manual_start_btn.config(state='disabled')
+        self.manual_send_once_btn.config(state='disabled')
+        self.manual_stop_btn.config(state='normal')
+
+        def worker():
+            while self.manual_cyclic_active:
+                success, msg = self.can.send_frame(can_id, data, self.manual_extended.get())
+                self.log(msg)
+                time.sleep(interval)
+
+        self.manual_cyclic_thread = threading.Thread(target=worker, daemon=True)
+        self.manual_cyclic_thread.start()
+
+    def manual_stop_cyclic(self):
+        self.manual_cyclic_active = False
+        self.manual_start_btn.config(state='normal')
+        self.manual_send_once_btn.config(state='normal')
+        self.manual_stop_btn.config(state='disabled')
+        self.log("Zatrzymano wysyłanie cykliczne")
+
+    # ---------- Wyszukiwanie binarne ----------
+    def start_binary_search(self):
+        if not self.binary_frames:
+            messagebox.showerror("Błąd", "Najpierw wczytaj plik")
+            return
+        if not self.can.connected:
+            messagebox.showerror("Błąd", "Połącz się z CAN")
+            return
+
+        self.binary_start_btn.config(state='disabled')
+        self.binary_yes_btn.config(state='normal')
+        self.binary_no_btn.config(state='normal')
+        self.binary_stop_btn.config(state='normal')
+        self.binary_undo_btn.config(state='normal')
+
+        mode = self.binary_mode.get()
+        num_parts = self.binary_parts.get() if mode == 'manual_parts' else 2
+
+        self.binary_answer = None
+        self.binary_answer_event = threading.Event()
+
+        def ask_callback(prompt="Czy zjawisko wystąpiło?", input_type='yesno', choices=None, default=None):
+            self.binary_answer_event.clear()
+            self.log(f"[Binary] {prompt}")
+            if input_type == 'yesno':
+                self.binary_answer_event.wait()
+                return self.binary_answer
+            elif input_type == 'choice':
+                choice = simpledialog.askinteger("Wybór", prompt, minvalue=1, maxvalue=len(choices))
+                self.binary_answer_event.set()
+                return choice - 1 if choice is not None else None
+            elif input_type == 'integer':
+                val = simpledialog.askinteger("Liczba części", prompt, initialvalue=default)
+                self.binary_answer_event.set()
+                return val
+            else:
+                self.binary_answer_event.wait()
+                return self.binary_answer
+
+        self.binary_thread = BinarySearchThread(
+            self.can, self.log, ask_callback, self._binary_done, self._update_binary_progress
+        )
+        self.binary_thread.setup(self.binary_frames, self.binary_interval.get(), mode, num_parts)
+        self.binary_thread.start()
+        self._update_binary_progress()
+
+    def binary_answer_yes(self):
+        if self.binary_thread and self.binary_thread.is_alive():
+            self.binary_answer = True
+            self.binary_answer_event.set()
+            self.log("[Binary] TAK")
+            self._update_binary_progress()
+
+    def binary_answer_no(self):
+        if self.binary_thread and self.binary_thread.is_alive():
+            self.binary_answer = False
+            self.binary_answer_event.set()
+            self.log("[Binary] NIE")
+            self._update_binary_progress()
+
+    def _update_binary_progress(self):
+        if self.binary_thread:
+            left = self.binary_thread.left
+            right = self.binary_thread.right
+            mid = self.binary_thread.mid
+            total = len(self.binary_frames)
+            self.binary_progress.config(text=f"Zakres: [{left} .. {right}]  środek: {mid}  (razem: {total})")
+            self._redraw_binary_progress()
+
+    def _redraw_binary_progress(self):
+        if not hasattr(self, 'binary_canvas') or not self.binary_frames:
+            return
+        canvas = self.binary_canvas
+        canvas.delete("all")
+        total = len(self.binary_frames)
+        if total == 0:
+            return
+        width = canvas.winfo_width()
+        if width <= 10:
+            width = 600
+
+        if self.binary_thread and self.binary_thread.running:
+            left = self.binary_thread.left
+            right = self.binary_thread.right
+            mid = self.binary_thread.mid
+        else:
+            left, right = 0, total - 1
+            mid = (left + right) // 2
+
+        def idx_to_x(idx):
+            return int((idx / (total - 1)) * width) if total > 1 else 0
+
+        x_left = idx_to_x(left)
+        x_right = idx_to_x(right)
+        x_mid = idx_to_x(mid)
+
+        canvas.create_rectangle(0, 0, width, 30, fill='lightgray', outline='')
+        canvas.create_rectangle(x_left, 0, x_right, 30, fill='lightgreen', outline='darkgreen')
+        canvas.create_line(x_mid, 0, x_mid, 30, fill='red', width=2)
+        canvas.create_text(x_left, 15, text=str(left), anchor='e', font=('Arial', 8))
+        canvas.create_text(x_right, 15, text=str(right), anchor='w', font=('Arial', 8))
+        canvas.create_text(x_mid, 0, text=str(mid), anchor='s', font=('Arial', 8, 'bold'), fill='red')
+
+    def _binary_done(self):
+        self.binary_start_btn.config(state='normal')
+        for btn in [self.binary_yes_btn, self.binary_no_btn, self.binary_stop_btn, self.binary_undo_btn]:
+            btn.config(state='disabled')
+        self.binary_progress.config(text="Wyszukiwanie zakończone.")
+        self._redraw_binary_progress()
+
+    def stop_binary_search(self):
+        if self.binary_thread:
+            self.binary_thread.stop()
+        self._binary_done()
+        self.log("[Binary] Zatrzymano.")
 
     def on_closing(self):
         self.manual_cyclic_active = False
@@ -355,6 +402,5 @@ class CanSimulatorApp(ConnectionHandlers, SimulationHandlers, BinaryHandlers, Wi
             self.sim_thread.stop()
         if self.binary_thread:
             self.binary_thread.stop()
-        if self.can:
-            self.can.disconnect()
+        self.can.disconnect()
         self.root.destroy()

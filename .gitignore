@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+*.pyo
+venv/
+env/
+*.log
+log.txt
+*.pkl
+binary_search_history.json
+.pytest_cache/
+.vscode/
+.idea/
