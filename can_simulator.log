@@ -33,3 +33,50 @@ KeyboardInterrupt
 2026-04-20 23:33:40,519 [INFO] CANSimulator - Czas: 2026-04-20 23:33:40.519811, Python: 3.13.12 (main, Feb  4 2026, 15:06:39) [GCC 15.2.0]
 2026-04-20 23:33:41,143 [INFO] App - Interfejs GUI utworzony
 2026-04-20 23:34:02,485 [INFO] CANInterface - Rozłączono
+2026-04-20 23:49:11,631 [INFO] CANSimulator - === CAN Simulator GUI ===
+2026-04-20 23:49:11,632 [INFO] CANSimulator - Czas: 2026-04-20 23:49:11.632018, Python: 3.13.12 (main, Feb  4 2026, 15:06:39) [GCC 15.2.0]
+2026-04-20 23:49:12,255 [INFO] App - Interfejs GUI utworzony
+2026-04-20 23:49:47,913 [INFO] CANInterface - Rozłączono
+2026-04-21 00:01:26,431 [INFO] CANSimulator - === CAN Simulator GUI ===
+2026-04-21 00:01:26,431 [INFO] CANSimulator - Czas: 2026-04-21 00:01:26.431923, Python: 3.13.12 (main, Feb  4 2026, 15:06:39) [GCC 15.2.0]
+2026-04-21 00:01:27,035 [INFO] App - Interfejs GUI utworzony
+2026-04-21 00:05:53,705 [INFO] CANInterface - Rozłączono
+2026-04-21 00:35:40,479 [INFO] CANSimulator - === CAN Simulator GUI ===
+2026-04-21 00:35:40,479 [INFO] CANSimulator - Czas: 2026-04-21 00:35:40.479439, Python: 3.13.12 (main, Feb  4 2026, 15:06:39) [GCC 15.2.0]
+2026-04-21 00:35:41,076 [INFO] App - Interfejs GUI utworzony
+2026-04-21 00:53:42,191 [INFO] CANSimulator - === CAN Simulator GUI ===
+2026-04-21 00:53:42,191 [INFO] CANSimulator - Czas: 2026-04-21 00:53:42.191529, Python: 3.13.12 (main, Feb  4 2026, 15:06:39) [GCC 15.2.0]
+2026-04-21 00:53:42,829 [INFO] App - Interfejs GUI utworzony
+2026-04-21 01:01:44,842 [INFO] CANSimulator - === CAN Simulator GUI ===
+2026-04-21 01:01:44,842 [INFO] CANSimulator - Czas: 2026-04-21 01:01:44.842456, Python: 3.13.12 (main, Feb  4 2026, 15:06:39) [GCC 15.2.0]
+2026-04-21 01:01:45,455 [INFO] App - Interfejs GUI utworzony
+2026-04-21 01:05:55,870 [INFO] CANSimulator - === CAN Simulator GUI ===
+2026-04-21 01:05:55,870 [INFO] CANSimulator - Czas: 2026-04-21 01:05:55.870336, Python: 3.13.12 (main, Feb  4 2026, 15:06:39) [GCC 15.2.0]
+2026-04-21 01:05:56,480 [INFO] App - Interfejs GUI utworzony
+2026-04-21 01:16:27,374 [INFO] CANSimulator - === CAN Simulator GUI ===
+2026-04-21 01:16:27,374 [INFO] CANSimulator - Czas: 2026-04-21 01:16:27.374611, Python: 3.13.12 (main, Feb  4 2026, 15:06:39) [GCC 15.2.0]
+2026-04-21 01:16:27,986 [INFO] App - Interfejs GUI utworzony
+2026-04-21 05:44:49,775 [INFO] CANSimulator - === CAN Simulator GUI ===
+2026-04-21 05:44:49,775 [INFO] CANSimulator - Czas: 2026-04-21 05:44:49.775537, Python: 3.13.12 (main, Feb  4 2026, 15:06:39) [GCC 15.2.0]
+2026-04-21 05:44:50,437 [INFO] App - Interfejs GUI utworzony
+2026-04-21 05:57:52,065 [INFO] CANSimulator - === CAN Simulator GUI ===
+2026-04-21 05:57:52,065 [INFO] CANSimulator - Czas: 2026-04-21 05:57:52.065329, Python: 3.13.12 (main, Feb  4 2026, 15:06:39) [GCC 15.2.0]
+2026-04-21 05:57:52,702 [INFO] App - Interfejs GUI utworzony
+2026-04-21 06:04:48,920 [INFO] CANSimulator - === CAN Simulator GUI ===
+2026-04-21 06:04:48,920 [INFO] CANSimulator - Czas: 2026-04-21 06:04:48.920147, Python: 3.13.12 (main, Feb  4 2026, 15:06:39) [GCC 15.2.0]
+2026-04-21 06:04:49,552 [INFO] App - Interfejs GUI utworzony
+2026-04-21 06:17:19,424 [INFO] CANSimulator - === CAN Simulator GUI ===
+2026-04-21 06:17:19,424 [INFO] CANSimulator - Czas: 2026-04-21 06:17:19.424710, Python: 3.13.12 (main, Feb  4 2026, 15:06:39) [GCC 15.2.0]
+2026-04-21 06:17:20,061 [INFO] App - Interfejs GUI utworzony
+2026-04-21 06:28:53,423 [INFO] CANSimulator - === CAN Simulator GUI ===
+2026-04-21 06:28:53,423 [INFO] CANSimulator - Czas: 2026-04-21 06:28:53.423134, Python: 3.13.12 (main, Feb  4 2026, 15:06:39) [GCC 15.2.0]
+2026-04-21 06:28:54,065 [INFO] App - Interfejs GUI utworzony
+2026-04-21 07:12:35,550 [INFO] CANSimulator - === CAN Simulator GUI ===
+2026-04-21 07:12:35,550 [INFO] CANSimulator - Czas: 2026-04-21 07:12:35.550839, Python: 3.13.12 (main, Feb  4 2026, 15:06:39) [GCC 15.2.0]
+2026-04-21 07:12:36,178 [INFO] App - Interfejs GUI utworzony
+2026-04-21 08:04:31,476 [INFO] CANSimulator - === CAN Simulator GUI ===
+2026-04-21 08:04:31,476 [INFO] CANSimulator - Czas: 2026-04-21 08:04:31.476381, Python: 3.13.12 (main, Feb  4 2026, 15:06:39) [GCC 15.2.0]
+2026-04-21 08:04:32,205 [INFO] App - Interfejs GUI utworzony
+2026-04-21 08:52:46,399 [INFO] CANSimulator - === CAN Simulator GUI ===
+2026-04-21 08:52:46,399 [INFO] CANSimulator - Czas: 2026-04-21 08:52:46.399554, Python: 3.13.12 (main, Feb  4 2026, 15:06:39) [GCC 15.2.0]
+2026-04-21 08:52:47,045 [INFO] App - Interfejs GUI utworzony
