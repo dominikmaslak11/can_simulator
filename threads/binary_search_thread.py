@@ -122,9 +122,62 @@ class BinarySearchThread(threading.Thread):
         self.done()
         self.log("Wyszukiwanie zakończone.")
 
+    def _smart_split_point(self):
+        """
+        Analizuje zakres [left, right] i zwraca sugerowany indeks podziału (mid).
+        Uwzględnia gęstość ramek, zmienność danych oraz predykcję modelu ML.
+        """
+        total = self.right - self.left + 1
+        if total < 10:
+            return (self.left + self.right) // 2
+
+        # Pobieramy cechy z modelu ML (jeśli dostępny)
+        if self.ml_model is not None and hasattr(self.ml_model, 'predict_proba'):
+            try:
+                feats = self._extract_features_for_range(self.left, self.right)
+                if feats is not None:
+                    prob = self.ml_model.predict_proba(feats)
+                    # Jeśli model jest pewny, że granica jest blisko, zawężamy przeszukiwanie
+                    if prob > 0.7:
+                        # Przeszukujemy węższy zakres wokół środka
+                        offset = int(total * 0.15)
+                        return min(self.right, max(self.left, (self.left + self.right) // 2 + np.random.randint(-offset, offset)))
+            except Exception:
+                pass
+
+        # Analiza gęstości ramek (odstępy czasowe)
+        if self.use_timestamps:
+            timestamps = [self.frames[i][3] for i in range(self.left, self.right + 1) if self.frames[i][3] is not None]
+            if len(timestamps) > 2:
+                diffs = np.diff(timestamps)
+                avg_diff = np.mean(diffs)
+                # Szukamy miejsc, gdzie odstęp jest znacznie większy niż średnia – naturalna granica
+                for i in range(1, len(diffs)):
+                    if diffs[i] > 2.0 * avg_diff:
+                        candidate = self.left + i
+                        if self.left < candidate < self.right:
+                            return candidate
+
+        # Analiza zmienności danych – szukamy "skoku" w zawartości ramek
+        data_variability = []
+        for i in range(self.left, self.right):
+            curr_data = self.frames[i][1]
+            next_data = self.frames[i+1][1]
+            # Prosta miara: liczba różnych bajtów
+            diff = sum(a != b for a, b in zip(curr_data, next_data))
+            data_variability.append(diff)
+        if data_variability:
+            max_idx = np.argmax(data_variability) + self.left
+            if self.left < max_idx < self.right:
+                return max_idx
+
+        # Domyślnie: podział na pół
+        return (self.left + self.right) // 2
+
     def _run_binary(self):
         while self.running and self.left <= self.right:
-            self.mid = (self.left + self.right) // 2
+            # Użyj inteligentnego podziału zamiast sztywnego //2
+            self.mid = self._smart_split_point()
             if self.mode == 'find_start':
                 start, end = self.left, self.mid - 1
             else:
@@ -134,7 +187,7 @@ class BinarySearchThread(threading.Thread):
                 self._save_state("empty_range")
                 break
 
-            self.log(f"=== Odtwarzanie zakresu [{start} .. {end}] ===")
+            self.log(f"=== Odtwarzanie zakresu [{start} .. {end}] (mid={self.mid}) ===")
             self._play_range(start, end)
             if not self.running:
                 break
