@@ -30,12 +30,22 @@ class CanSimulatorApp:
         self.manual_cyclic_active = False
         self.manual_cyclic_thread = None
 
+        # Zmienna dla checkboxa "Użyj oryginalnych odstępów czasowych"
+        self.replay_use_timestamps = tk.BooleanVar(value=False)
+
         # Atrybuty dla kreatora wyszukiwania
-        self.wizard_frames = []                     # lista wczytanych ramek
-        self.wizard_id_frame = tk.StringVar()       # ID szukanej ramki
-        self.wizard_data_frame = tk.StringVar()     # dane szukanej ramki
-        self.wizard_is_extended = tk.BooleanVar(value=False)
-        self.wizard_search_mode = tk.StringVar(value="single")
+        self.wizard_frames = []
+        self.wizard_id_var = tk.StringVar()
+        self.wizard_data_var = tk.StringVar()
+        self.wizard_extended_var = tk.BooleanVar(value=False)
+        self.wizard_mode_var = tk.StringVar(value="single")
+        self.wizard_sequence = []
+        self.wizard_target = None
+        self.wizard_left = 0
+        self.wizard_right = 0
+        self.wizard_history = []
+        self.wizard_answer = None
+        self.wizard_answer_event = threading.Event()
 
         self._create_widgets()
         logger.info("Interfejs GUI utworzony")
@@ -178,7 +188,8 @@ class CanSimulatorApp:
             self.loaded_frames,
             self.replay_interval.get(),
             self.replay_loop.get(),
-            self.replay_speed.get()
+            self.replay_speed.get(),
+            self.replay_use_timestamps.get()          # <-- przekazanie timestampów
         )
         self.sim_thread.start()
         self._simulation_started()
@@ -322,7 +333,13 @@ class CanSimulatorApp:
         self.binary_thread = BinarySearchThread(
             self.can, self.log, ask_callback, self._binary_done, self._update_binary_progress
         )
-        self.binary_thread.setup(self.binary_frames, self.binary_interval.get(), mode, num_parts)
+        self.binary_thread.setup(
+            self.binary_frames,
+            self.binary_interval.get(),
+            mode=mode,
+            num_parts=num_parts,
+            use_timestamps=self.binary_use_timestamps.get()      # <-- przekazanie timestampów
+        )
         self.binary_thread.start()
         self._update_binary_progress()
 
@@ -395,6 +412,40 @@ class CanSimulatorApp:
             self.binary_thread.stop()
         self._binary_done()
         self.log("[Binary] Zatrzymano.")
+
+    # ---------- Kreator wyszukiwania (metody pomocnicze) ----------
+    def _update_wizard_progress(self):
+        if self.wizard_frames:
+            total = len(self.wizard_frames)
+            self.wizard_progress.config(text=f"Zakres: [{self.wizard_left} .. {self.wizard_right}] (razem: {total})")
+            self._redraw_wizard_progress()
+
+    def _redraw_wizard_progress(self):
+        canvas = self.wizard_canvas
+        canvas.delete("all")
+        total = len(self.wizard_frames)
+        if total == 0:
+            return
+        width = canvas.winfo_width()
+        if width <= 10:
+            width = 600
+
+        left, right = self.wizard_left, self.wizard_right
+
+        def idx_to_x(idx):
+            return int((idx / (total - 1)) * width) if total > 1 else 0
+
+        x_left = idx_to_x(left)
+        x_right = idx_to_x(right)
+        mid = (left + right) // 2
+        x_mid = idx_to_x(mid)
+
+        canvas.create_rectangle(0, 0, width, 30, fill='lightgray', outline='')
+        canvas.create_rectangle(x_left, 0, x_right, 30, fill='lightblue', outline='darkblue')
+        canvas.create_line(x_mid, 0, x_mid, 30, fill='red', width=2)
+        canvas.create_text(x_left, 15, text=str(left), anchor='e', font=('Arial', 8))
+        canvas.create_text(x_right, 15, text=str(right), anchor='w', font=('Arial', 8))
+        canvas.create_text(x_mid, 0, text=str(mid), anchor='s', font=('Arial', 8, 'bold'), fill='red')
 
     def on_closing(self):
         self.manual_cyclic_active = False

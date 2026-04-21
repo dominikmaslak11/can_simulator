@@ -11,8 +11,9 @@ class SimulationThread(threading.Thread):
         self.log_cb = log_callback
         self.running = False
         self.paused = False
-        self.frames = []
+        self.frames = []               # każdy element: (can_id, data, is_ext, timestamp)
         self.fixed_interval = 0.5
+        self.use_timestamps = False
         self.loop = False
         self.speed = 1.0
         self.idx = 0
@@ -22,13 +23,15 @@ class SimulationThread(threading.Thread):
         if self.log_cb:
             self.log_cb(msg)
 
-    def setup_replay(self, frames, fixed_interval, loop, speed=1.0):
+    def setup_replay(self, frames, fixed_interval, loop, speed=1.0, use_timestamps=False):
         self.frames = frames
         self.fixed_interval = fixed_interval
         self.loop = loop
         self.speed = speed
+        self.use_timestamps = use_timestamps
         self.idx = 0
-        self.log(f"Setup replay: {len(frames)} ramek, interwał={fixed_interval}, pętla={loop}, przysp={speed}")
+        self.log(f"Setup replay: {len(frames)} ramek, interwał={fixed_interval}, "
+                 f"timestamps={use_timestamps}, pętla={loop}, przysp={speed}")
 
     def setup_missing_module(self, interval_8f, interval_diag, interval_sporadic):
         self.mode = 'missing'
@@ -55,19 +58,29 @@ class SimulationThread(threading.Thread):
         self.log("Wątek symulacji zakończony")
 
     def _run_replay(self):
+        last_ts = None
         while self.running:
             if not self.paused:
                 if self.idx >= len(self.frames):
                     if self.loop:
                         self.idx = 0
+                        last_ts = None
                         self.log("--- Pętla od początku ---")
                     else:
                         break
-                can_id, data, is_ext = self.frames[self.idx]
+                can_id, data, is_ext, ts = self.frames[self.idx]
+                if self.use_timestamps and ts is not None:
+                    if last_ts is not None and ts > last_ts:
+                        delay = (ts - last_ts) / self.speed
+                        if delay > 0:
+                            time.sleep(delay)
+                    last_ts = ts
+                else:
+                    time.sleep(self.fixed_interval / self.speed)
+
                 success, msg = self.can.send_frame(can_id, data, is_ext)
                 self.log(msg)
                 self.idx += 1
-                time.sleep(self.fixed_interval / self.speed)
             else:
                 time.sleep(0.1)
         if not self.running:
@@ -86,7 +99,7 @@ class SimulationThread(threading.Thread):
             (0x0C220005, b'\x1E\xFF\x00\x00\x00\x2D\x00\x00', False),
             (0x0C230005, b'\x28\x0A\x00\x00\x00\x06\x00\x00', False),
             (0x08610005, b'\x06\x00\x00\x22\x02\x00\x0A\x01', False),
-            (0x08620005, b'\x00\x00\x00\x00\x00\x00\x01\xEE', False),
+            (0x08620005, b'\x00\x00\x00\x00\x00\x00\x01\x00', False),
             (0x19202324, b'\x02\x0F\xFF\xFF\x01\xFF\xFF\xFF', True),
             (0x19202324, b'\x04\x0F\xFF\xFF\xFF\xFF\xFF\xFF', True),
             (0x19202324, b'\x03\x0F\xFF\xFF\xFF\xFF\xFF\xFF', True),
@@ -96,7 +109,7 @@ class SimulationThread(threading.Thread):
             (0x18202423, b'\x04\x05\x00\x00\x00\x0A\x0F\xFF', True),
             (0x18202423, b'\x03\x06\x00\x00\x00\x00\x0F\xFF', True),
             (0x18213635, b'\x01\x05\x00\x00\x00\x00\x0F\xFF', True),
-            (0x18213635, b'\x00\x05\x00\x00\xAA\xA9\x0F\xFF', True),
+            (0x18213635, b'\x00\x05\x00\x00\x00\x00\x0F\xFF', True),  # drobna korekta danych
             (0x112A6061, b'\x02\x0F\xFF\xFF\xFF\xFF\xFF\xFF', True),
             (0x102A6160, b'\x02\x05\x00\xFF\xFF\xFF\x0F\xFF', True),
         ]
@@ -130,7 +143,7 @@ class SimulationThread(threading.Thread):
                         d1 = b'\xFF\xFF\xFF\xFF\x9F\x01\xFF\xFF'
                         d2 = b'\x00\x96\x00\x00\x95\x01\x0F\xFF'
                     else:
-                        d1 = b'\xFF\x00\xFF\xFF\x9F\x00\xFF\xFF'
+                        d1 = b'\xFF\x00\xFF\x00\x9F\x00\xFF\xFF'
                         d2 = b'\x00\x96\x00\x00\x95\x00\x0F\xFF'
                     self.can.send_frame(0x11204032, d1, True)
                     self.can.send_frame(0x10203240, d2, True)

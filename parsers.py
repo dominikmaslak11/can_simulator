@@ -6,12 +6,14 @@ def parse_candump_line(line):
     if not line or 'can0' not in line or '#' not in line:
         return None
     try:
-        ts = float(line.split(')')[0].lstrip('('))
+        ts_part = line.split(')')[0].lstrip('(')
+        timestamp = float(ts_part)
         rest = line.split('can0 ')[1]
         id_part, data_part = rest.split('#')
         can_id = int(id_part.strip(), 16)
         data = bytes.fromhex(data_part.strip())
-        return (ts, can_id, data, can_id > 0x7FF)
+        is_extended = (can_id > 0x7FF)
+        return (timestamp, can_id, data, is_extended)
     except Exception:
         return None
 
@@ -28,19 +30,24 @@ def parse_log_line(line):
     try:
         can_id = int(id_part.strip(), 16)
         data = bytes.fromhex(data_part.strip())
-        return (can_id, data, can_id > 0x7FF)
+        is_extended = (can_id > 0x7FF)
+        return (None, can_id, data, is_extended)   # timestamp = None
     except ValueError:
         return None
 
 def load_frames_from_file(path):
     frames = []
     logger.info(f"Wczytywanie: {path}")
-    with open(path) as f:
+    with open(path, 'r') as f:
         for line in f:
-            p = parse_candump_line(line) or parse_log_line(line)
+            p = parse_candump_line(line)
             if p:
-                frames.append((p[1] if len(p)==4 else p[0],
-                               p[2] if len(p)==4 else p[1],
-                               p[3] if len(p)==4 else p[2]))
+                ts, can_id, data, is_ext = p
+                frames.append((can_id, data, is_ext, ts))
+                continue
+            p = parse_log_line(line)
+            if p:
+                ts, can_id, data, is_ext = p
+                frames.append((can_id, data, is_ext, ts))
     logger.info(f"Wczytano {len(frames)} ramek")
     return frames
