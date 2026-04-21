@@ -4,6 +4,7 @@ import threading
 from datetime import datetime
 from threads import BinarySearchThread
 from sequence_analyzer import SequenceAnalyzer
+from ml.feature_extractor import extract_features
 
 
 class BinaryHandlers:
@@ -149,8 +150,15 @@ class BinaryHandlers:
                        command=lambda: self._use_in_simulation(first)).pack(side=tk.LEFT, padx=5)
             ttk.Button(btn_frame, text="Testuj alert (10s)",
                        command=lambda: self._quick_test(first[0], first[1], first[2])).pack(side=tk.LEFT, padx=5)
+            ttk.Button(btn_frame, text="Potwierdź jako właściwą",
+                       command=lambda: self._mark_as_verified(first[0], first[1], first[2])).pack(side=tk.LEFT, padx=5)
 
         self.binary_progress.config(text=f"Dezaktywacja! {len(candidates)} kandydatów.")
+
+        # Powiadom kreator, jeśli czeka na wynik dezaktywatora
+        if hasattr(self, '_wizard_awaiting_deact_result') and self._wizard_awaiting_deact_result:
+            self.wizard_on_deactivator_found(candidates)
+            self._wizard_awaiting_deact_result = False
 
     def _load_candidates_to_binary(self, candidates):
         if not candidates:
@@ -242,7 +250,6 @@ class BinaryHandlers:
         if hasattr(self, 'use_in_simulation'):
             self.use_in_simulation(can_id, data, is_extended)
         else:
-            # fallback
             self.manual_id.set(f"{can_id:08X}")
             self.manual_data.set(data.hex().upper())
             self.manual_extended.set(is_extended)
@@ -261,6 +268,16 @@ class BinaryHandlers:
         cid, data, is_ext = pattern[0]
         self._quick_test(cid, data, is_ext)
 
+    def _mark_as_verified(self, cid, data, is_ext):
+        features = extract_features([(cid, data, is_ext)])
+        if hasattr(self, 'binary_thread') and self.binary_thread:
+            self.binary_thread.ml_model.add_verified_sample(features, 1, weight=3.0)
+            self.binary_thread.ml_model.train()
+            self.log(f"[ML] Dodano zweryfikowaną próbkę: ID=0x{cid:08X}")
+            messagebox.showinfo("ML", "Ramka została oznaczona jako właściwa i dodana do modelu.")
+        else:
+            messagebox.showerror("Błąd", "Brak aktywnego modelu ML.")
+
     def _show_result_with_simulation_button(self, cid, data, is_ext):
         win = tk.Toplevel(self.root)
         win.title("Wynik wyszukiwania")
@@ -272,6 +289,8 @@ class BinaryHandlers:
                    command=lambda: [self._switch_to_simulation_tab(cid, data, is_ext), win.destroy()]).pack(side=tk.LEFT, padx=5)
         ttk.Button(btn_frame, text="Testuj alert (10s)",
                    command=lambda: [self._quick_test(cid, data, is_ext), win.destroy()]).pack(side=tk.LEFT, padx=5)
+        ttk.Button(btn_frame, text="Potwierdź jako właściwą",
+                   command=lambda: [self._mark_as_verified(cid, data, is_ext), win.destroy()]).pack(side=tk.LEFT, padx=5)
         ttk.Button(btn_frame, text="Zamknij", command=win.destroy).pack(side=tk.LEFT, padx=5)
 
     def binary_answer_yes(self):
@@ -342,6 +361,15 @@ class BinaryHandlers:
             if idx < len(self.binary_frames):
                 cid, data, is_ext = self.binary_frames[idx]
                 self._show_result_with_simulation_button(cid, data, is_ext)
+
+        # Powiadom kreator, jeśli czeka na wynik alertu
+        if hasattr(self, '_wizard_awaiting_alert_result') and self._wizard_awaiting_alert_result:
+            if self.binary_thread and hasattr(self.binary_thread, 'left') and self.binary_thread.left == self.binary_thread.right:
+                idx = self.binary_thread.left
+                if idx < len(self.binary_frames):
+                    cid, data, is_ext = self.binary_frames[idx]
+                    self.wizard_on_alert_found(cid, data, is_ext)
+            self._wizard_awaiting_alert_result = False
 
     def stop_binary_search(self):
         if self.binary_thread:
