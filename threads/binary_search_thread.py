@@ -49,6 +49,9 @@ class BinarySearchThread(threading.Thread):
         self.rl_total_frames = 0
         self.rl_episode_frames_played = 0
 
+        # Cache dla ekstrakcji cech (klucz: (start, end))
+        self._feature_cache = {}
+
     def log(self, msg):
         logger.info(msg)
         if self.log_cb:
@@ -63,6 +66,7 @@ class BinarySearchThread(threading.Thread):
         self.right = right if right is not None else len(frames) - 1
         self.running = True
         self._save_state("start")
+        self._feature_cache.clear()
 
     def setup_hunting(self, frames, interval, alert_id, period=1.0, tolerance=0.2, start_index=0):
         self.frames = frames
@@ -77,6 +81,7 @@ class BinarySearchThread(threading.Thread):
         self.running = True
         self.detector = CyclicDetector(alert_id, period, tolerance)
         self.log(f"Tryb polowania: ID=0x{alert_id:08X}, okres={period}s, tolerancja={tolerance}, start_idx={self.start_index}")
+        self._feature_cache.clear()
 
     def setup_rl_hunting(self, frames, interval, alert_id, period=1.0, tolerance=0.2, start_index=0):
         self.frames = frames
@@ -95,6 +100,7 @@ class BinarySearchThread(threading.Thread):
             from rl_agent import RLAgent
             self.rl_agent = RLAgent()
         self.log(f"Tryb RL-polowania: ID=0x{alert_id:08X}, start_idx={self.start_index}")
+        self._feature_cache.clear()
 
     def _save_state(self, action="step"):
         state = {
@@ -208,7 +214,6 @@ class BinarySearchThread(threading.Thread):
             if deactivated:
                 self.log(f"!!! Dezaktywacja po {self.rl_episode_frames_played} ramkach !!!")
                 candidates = self.detector.get_candidate_window(window_before=1.0)
-                # Nagroda: im szybciej znaleziono, tym lepiej
                 reward = 1.0 / max(1, self.rl_episode_frames_played)
                 action = self.rl_agent.choose_action(self.start_index, self.rl_total_frames)
                 new_start = max(0, min(self.rl_total_frames - 1, self.start_index + action))
@@ -280,7 +285,14 @@ class BinarySearchThread(threading.Thread):
                 e = self.right if i == self.num_parts - 1 else s + part_size - 1
                 parts.append((s, e))
 
-            part_probs = [(s, e, self.ml_model.predict_proba(extract_features(self.frames[s:e+1]))) for s, e in parts]
+            part_probs = []
+            for s, e in parts:
+                cache_key = (s, e)
+                if cache_key not in self._feature_cache:
+                    self._feature_cache[cache_key] = extract_features(self.frames[s:e+1])
+                prob = self.ml_model.predict_proba(self._feature_cache[cache_key])
+                part_probs.append((s, e, prob))
+
             parts_sorted = sorted(part_probs, key=lambda x: x[2], reverse=(self.mode == 'find_start'))
 
             part_results = []
@@ -297,7 +309,10 @@ class BinarySearchThread(threading.Thread):
                 if resp is None:
                     return
                 part_results.append((s, e, resp))
-                feats = extract_features(self.frames[s:e+1])
+                feats = self._feature_cache.get((s, e))
+                if feats is None:
+                    feats = extract_features(self.frames[s:e+1])
+                    self._feature_cache[(s, e)] = feats
                 self.ml_model.add_sample(feats, 1 if resp else 0)
 
             target = [p for p in part_results if p[2] == (self.mode == 'find_start')]
@@ -327,7 +342,10 @@ class BinarySearchThread(threading.Thread):
 
     def _play_range(self, start, end):
         if start <= end:
-            self.last_played_features = extract_features(self.frames[start:end+1])
+            cache_key = (start, end)
+            if cache_key not in self._feature_cache:
+                self._feature_cache[cache_key] = extract_features(self.frames[start:end+1])
+            self.last_played_features = self._feature_cache[cache_key]
         else:
             self.last_played_features = None
         for i in range(start, end + 1):
