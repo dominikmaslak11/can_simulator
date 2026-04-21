@@ -5,6 +5,7 @@ from datetime import datetime
 from threads import BinarySearchThread
 from sequence_analyzer import SequenceAnalyzer
 from ml.feature_extractor import extract_features
+from export_utils import export_candidates_to_csv, export_frame_to_csv
 
 
 class BinaryHandlers:
@@ -152,6 +153,8 @@ class BinaryHandlers:
                        command=lambda: self._quick_test(first[0], first[1], first[2])).pack(side=tk.LEFT, padx=5)
             ttk.Button(btn_frame, text="Potwierdź jako właściwą",
                        command=lambda: self._mark_as_verified(first[0], first[1], first[2])).pack(side=tk.LEFT, padx=5)
+            ttk.Button(btn_frame, text="Eksportuj do CSV",
+                       command=lambda: self._export_candidates_csv(candidates)).pack(side=tk.LEFT, padx=5)
 
         self.binary_progress.config(text=f"Dezaktywacja! {len(candidates)} kandydatów.")
 
@@ -159,6 +162,14 @@ class BinaryHandlers:
         if hasattr(self, '_wizard_awaiting_deact_result') and self._wizard_awaiting_deact_result:
             self.wizard_on_deactivator_found(candidates)
             self._wizard_awaiting_deact_result = False
+
+    def _export_candidates_csv(self, candidates):
+        try:
+            filename = export_candidates_to_csv(candidates)
+            self.log(f"Wyeksportowano {len(candidates)} kandydatów do {filename}")
+            messagebox.showinfo("Eksport CSV", f"Zapisano do pliku:\n{filename}")
+        except Exception as e:
+            messagebox.showerror("Błąd eksportu", str(e))
 
     def _load_candidates_to_binary(self, candidates):
         if not candidates:
@@ -291,7 +302,17 @@ class BinaryHandlers:
                    command=lambda: [self._quick_test(cid, data, is_ext), win.destroy()]).pack(side=tk.LEFT, padx=5)
         ttk.Button(btn_frame, text="Potwierdź jako właściwą",
                    command=lambda: [self._mark_as_verified(cid, data, is_ext), win.destroy()]).pack(side=tk.LEFT, padx=5)
+        ttk.Button(btn_frame, text="Eksportuj do CSV",
+                   command=lambda: self._export_single_frame_csv(cid, data, is_ext)).pack(side=tk.LEFT, padx=5)
         ttk.Button(btn_frame, text="Zamknij", command=win.destroy).pack(side=tk.LEFT, padx=5)
+
+    def _export_single_frame_csv(self, cid, data, is_ext):
+        try:
+            filename = export_frame_to_csv(cid, data, is_ext)
+            self.log(f"Wyeksportowano ramkę do {filename}")
+            messagebox.showinfo("Eksport CSV", f"Zapisano do pliku:\n{filename}")
+        except Exception as e:
+            messagebox.showerror("Błąd eksportu", str(e))
 
     def binary_answer_yes(self):
         if self.binary_thread and self.binary_thread.is_alive():
