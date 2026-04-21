@@ -1,24 +1,94 @@
 from .base_controller import BaseController
-from threads import SimulationThread
-
+from tkinter import messagebox
+from parsers import load_frames_from_file
+import numpy as np
 
 class MissingController(BaseController):
     def __init__(self, app):
         super().__init__(app)
-        self.custom_frames = []  # lista (id, data, is_ext)
+        self.frames = []
+        self.reference_intervals = {}
+
+    def add_frame(self, cid, data, is_ext, interval):
+        self.frames.append({'id': cid, 'data': data, 'ext': is_ext, 'interval': interval})
+
+    def remove_frame(self, idx):
+        if 0 <= idx < len(self.frames):
+            del self.frames[idx]
+
+    def update_frame(self, idx, cid, data, is_ext, interval):
+        if 0 <= idx < len(self.frames):
+            self.frames[idx] = {'id': cid, 'data': data, 'ext': is_ext, 'interval': interval}
+
+    def clear_frames(self):
+        self.frames.clear()
+
+    def analyze_reference_file(self):
+        """Wczytuje plik referencyjny i wyświetla średnie interwały (opcjonalnie)."""
+        path = self.app.missing_ref_file.get()
+        if not path:
+            messagebox.showinfo("Brak pliku", "Wybierz plik referencyjny.")
+            return
+        try:
+            frames = load_frames_from_file(path)
+            intervals = self._compute_intervals(frames)
+            self.reference_intervals = intervals
+            # Wyświetl podsumowanie w logu
+            self.log("[Missing] Obliczono interwały referencyjne.")
+            for cid, val in intervals.items():
+                self.log(f"  ID 0x{cid:08X}: {val:.4f}s")
+            messagebox.showinfo("Sukces", f"Obliczono interwały dla {len(intervals)} ID.")
+        except Exception as e:
+            messagebox.showerror("Błąd", f"Nie udało się przeanalizować pliku: {e}")
+
+    def _compute_intervals(self, frames):
+        id_timestamps = {}
+        for f in frames:
+            cid = f[0]
+            ts = f[3] if len(f) > 3 else None
+            if ts is not None:
+                id_timestamps.setdefault(cid, []).append(ts)
+        intervals = {}
+        for cid, stamps in id_timestamps.items():
+            if len(stamps) > 1:
+                diffs = np.diff(sorted(stamps))
+                intervals[cid] = float(np.mean(diffs))
+        return intervals
 
     def start_missing(self):
         self.app._start_sim()
-        self.app.sim_thread.setup_missing_module(
-            self.app.missing_8f.get(),
-            self.app.missing_diag.get(),
-            self.app.missing_spor.get(),
-            self.custom_frames
-        )
+
+        # Jeśli użyto timestampów, wczytaj plik i zastąp interwały
+        if self.app.missing_use_timestamps.get():
+            path = self.app.missing_ref_file.get()
+            if not path:
+                messagebox.showerror("Błąd", "Wybierz plik referencyjny.")
+                return
+            try:
+                frames = load_frames_from_file(path)
+                intervals = self._compute_intervals(frames)
+                # Zastosuj interwały do ramek w tabeli
+                for f in self.frames:
+                    cid = f['id']
+                    if cid in intervals:
+                        f['interval'] = intervals[cid]
+                self.log("[Missing] Zastosowano oryginalne interwały z pliku referencyjnego.")
+            except Exception as e:
+                messagebox.showerror("Błąd", f"Nie udało się wczytać pliku: {e}")
+                return
+
+        self.app.sim_thread.setup_missing_module(self.frames)
         self.app.sim_thread.mode = 'missing'
         self.app.sim_thread.start()
         self.app._simulation_started()
 
-    def add_custom_frame(self, can_id, data, is_ext):
-        self.custom_frames.append((can_id, data, is_ext))
-        self.log(f"[Missing] Dodano niestandardową ramkę: 0x{can_id:08X}")
+    def _refresh_tree(self):
+        """Odświeża widok tabeli w GUI."""
+        if hasattr(self.app, 'missing_tree'):
+            tree = self.app.missing_tree
+            tree.delete(*tree.get_children())
+            for f in self.frames:
+                tree.insert("", tk.END, values=(
+                    f"0x{f['id']:08X}", f['data'].hex().upper(),
+                    "X" if f['ext'] else "", f"{f['interval']:.3f}"
+                ))

@@ -65,6 +65,10 @@ def setup_binary_tab(app, tab):
     import_btn = ttk.Button(btn_frame, text="Importuj sesję",
                             command=lambda: import_binary_session(app))
     import_btn.pack(side=tk.LEFT, padx=5)
+    send_error_btn = ttk.Button(btn_frame, text="Symuluj jako błąd", state='disabled', command=lambda: app.binary_ctrl.send_to_error_sim())
+    send_error_btn.pack(side=tk.LEFT, padx=5)
+    send_missing_btn = ttk.Button(btn_frame, text="Symuluj jako moduł", state='disabled', command=lambda: app.binary_ctrl.send_to_missing_sim())
+    send_missing_btn.pack(side=tk.LEFT, padx=5)
     send_error_btn = ttk.Button(btn_frame, text="Symuluj jako błąd", state='disabled',
                                 command=lambda: app.binary_ctrl.send_to_error_sim())
     send_error_btn.pack(side=tk.LEFT, padx=5)
@@ -87,6 +91,8 @@ def setup_binary_tab(app, tab):
     app.binary_stop_btn = stop_btn
     app.binary_undo_btn = undo_btn
     app.binary_export_btn = export_btn
+    app.binary_send_error_btn = send_error_btn
+    app.binary_send_missing_btn = send_missing_btn
     app.binary_send_error_btn = send_error_btn
     app.binary_send_missing_btn = send_missing_btn
 

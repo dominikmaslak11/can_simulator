@@ -134,6 +134,9 @@ def train_model(app, normal_path, anomaly_path):
     app.root.update()
 
     def train_thread():
+        # Przekaż DBC jeśli dostępny
+        if hasattr(app, 'sniffer_ctrl') and app.sniffer_ctrl.dbc_db:
+            app.ml_classifier.set_dbc(app.sniffer_ctrl.dbc_db)
         success = app.ml_classifier.train(normal_frames, anomaly_frames)
         app.root.after(0, lambda: finish_training(success))
 
@@ -164,6 +167,8 @@ def analyze_log(app, test_path):
     app.root.update()
 
     def analyze_thread():
+        if hasattr(app, 'sniffer_ctrl') and app.sniffer_ctrl.dbc_db:
+            app.ml_classifier.set_dbc(app.sniffer_ctrl.dbc_db)
         times, probs, windows = app.ml_classifier.predict_proba(test_frames)
         app.root.after(0, lambda: draw_results(app, times, probs, windows, test_frames, "Analiza nadzorowana"))
 
@@ -184,6 +189,8 @@ def detect_anomalies(app, test_path):
     app.root.update()
 
     def detect_thread():
+        if hasattr(app, 'sniffer_ctrl') and app.sniffer_ctrl.dbc_db:
+            app.ml_classifier.set_dbc(app.sniffer_ctrl.dbc_db)
         times, probs, windows = app.ml_classifier.detect_anomalies_unsupervised(test_frames)
         app.root.after(0, lambda: draw_results(app, times, probs, windows, test_frames, "Wykrywanie anomalii (bez nadzoru)"))
 
@@ -263,24 +270,28 @@ def show_anomaly_report(app):
 
     win = tk.Toplevel(app.root)
     win.title("Raport anomalii")
-    win.geometry("1000x500")
+    win.geometry("1100x500")
     win.transient(app.root)
     win.grab_set()
 
     frame = ttk.Frame(win, padding=10)
     frame.pack(fill=tk.BOTH, expand=True)
 
-    columns = ('start', 'end', 'prob', 'cause')
+    columns = ('start', 'end', 'prob', 'cause', 'signals', 'action')
     tree = ttk.Treeview(frame, columns=columns, show='headings', height=12)
     tree.heading('start', text='Początek [s]')
     tree.heading('end', text='Koniec [s]')
     tree.heading('prob', text='Prawdop.')
     tree.heading('cause', text='Przyczyna')
+    tree.heading('signals', text='Sygnały')
+    tree.heading('action', text='Akcja')
+    tree.column('action', width=120)
 
-    tree.column('start', width=120)
-    tree.column('end', width=120)
-    tree.column('prob', width=80)
-    tree.column('cause', width=500)
+    tree.column('start', width=100)
+    tree.column('end', width=100)
+    tree.column('prob', width=70)
+    tree.column('cause', width=400)
+    tree.column('signals', width=250)
 
     vsb = ttk.Scrollbar(frame, orient="vertical", command=tree.yview)
     tree.configure(yscrollcommand=vsb.set)
@@ -290,12 +301,17 @@ def show_anomaly_report(app):
     for r in app.ml_last_report:
         start = r['start_time']
         end = r['end_time']
-        t0 = app.ml_last_windows[0][0][3] if app.ml_last_windows[0] else start
+        t0 = app.ml_last_windows[0][0][3] if app.ml_last_windows and app.ml_last_windows[0] else start
+        signals_summary = ""
+        if 'signals' in r['details']:
+            sigs = list(r['details']['signals'].keys())[:3]
+            signals_summary = ", ".join(sigs)
         tree.insert("", tk.END, values=(
             f"{start - t0:.3f}",
             f"{end - t0:.3f}",
             f"{r['probability']:.2f}",
-            r['cause']
+            r['cause'],
+            signals_summary
         ))
 
     def on_select(event):
@@ -308,12 +324,74 @@ def show_anomaly_report(app):
             if hasattr(app, 'sniffer_ctrl'):
                 app.sniffer_ctrl.highlight_time_range(r['start_time'], r['end_time'])
 
+    def on_double_click(event):
+        sel = tree.selection()
+        if not sel:
+            return
+        idx = tree.index(sel[0])
+        if idx < len(app.ml_last_report):
+            r = app.ml_last_report[idx]
+            if 'signals' in r['details'] and r['details']['signals']:
+                show_signal_details(app, r['details']['signals'], r['start_time'], r['end_time'])
+
     tree.bind('<<TreeviewSelect>>', on_select)
+    tree.bind('<Double-1>', on_double_click)
 
     btn_frame = ttk.Frame(win)
+    def simulate_selected():
+        sel = tree.selection()
+        if sel:
+            idx = tree.index(sel[0])
+            if idx < len(app.ml_last_report):
+                r = app.ml_last_report[idx]
+                simulate_missing_from_report(app, r)
+    
+    sim_btn = ttk.Button(btn_frame, text="Symuluj brakujące (zaznaczone)", command=simulate_selected)
+    sim_btn.pack(side=tk.LEFT, padx=5)
     btn_frame.pack(pady=10)
     ttk.Button(btn_frame, text="Eksportuj raport", command=lambda: export_report(app)).pack(side=tk.LEFT, padx=5)
     ttk.Button(btn_frame, text="Zamknij", command=win.destroy).pack(side=tk.LEFT, padx=5)
+
+
+def show_signal_details(app, signals, start_time, end_time):
+    win = tk.Toplevel(app.root)
+    win.title(f"Sygnały w oknie {start_time:.3f}-{end_time:.3f}")
+    win.geometry("700x450")
+    win.transient(app.root)
+    win.grab_set()
+
+    frame = ttk.Frame(win, padding=10)
+    frame.pack(fill=tk.BOTH, expand=True)
+
+    columns = ('name', 'min', 'max', 'avg', 'count')
+    tree = ttk.Treeview(frame, columns=columns, show='headings', height=12)
+    tree.heading('name', text='Sygnał')
+    tree.heading('min', text='Min')
+    tree.heading('max', text='Max')
+    tree.heading('avg', text='Średnia')
+    tree.heading('count', text='Liczba')
+
+    tree.column('name', width=250)
+    tree.column('min', width=100)
+    tree.column('max', width=100)
+    tree.column('avg', width=100)
+    tree.column('count', width=80)
+
+    vsb = ttk.Scrollbar(frame, orient="vertical", command=tree.yview)
+    tree.configure(yscrollcommand=vsb.set)
+    tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+    vsb.pack(side=tk.RIGHT, fill=tk.Y)
+
+    for sig_name, vals in signals.items():
+        tree.insert("", tk.END, values=(
+            sig_name,
+            f"{vals['min']:.3f}",
+            f"{vals['max']:.3f}",
+            f"{vals['avg']:.3f}",
+            vals['count']
+        ))
+
+    ttk.Button(win, text="Zamknij", command=win.destroy).pack(pady=10)
 
 
 def export_report(app):
@@ -325,13 +403,48 @@ def export_report(app):
     import csv
     with open(filepath, 'w', newline='', encoding='utf-8') as f:
         writer = csv.writer(f)
-        writer.writerow(['Start [s]', 'Koniec [s]', 'Prawdopodobieństwo', 'Przyczyna'])
-        t0 = app.ml_last_windows[0][0][3] if app.ml_last_windows[0] else 0
+        writer.writerow(['Start [s]', 'Koniec [s]', 'Prawdopodobieństwo', 'Przyczyna', 'Sygnały'])
+        t0 = app.ml_last_windows[0][0][3] if app.ml_last_windows and app.ml_last_windows[0] else 0
         for r in app.ml_last_report:
+            signals_summary = ""
+            if 'signals' in r['details']:
+                signals_summary = ", ".join(r['details']['signals'].keys())
             writer.writerow([
                 f"{r['start_time'] - t0:.3f}",
                 f"{r['end_time'] - t0:.3f}",
                 f"{r['probability']:.3f}",
-                r['cause']
+                r['cause'],
+                signals_summary
             ])
     app.log(f"[ML] Raport wyeksportowany do {filepath}")
+
+def simulate_missing_from_report(app, report_item):
+    """Dodaje brakujące ID do symulacji modułu."""
+    if 'suggested_intervals' not in report_item['details']:
+        messagebox.showinfo("Brak danych", "Brak informacji o interwałach dla brakujących ID.")
+        return
+    missing_ids = []
+    for part in report_item['cause'].split(';'):
+        if 'Brakujące ID:' in part:
+            ids_str = part.split(':')[1].strip()
+            for id_str in ids_str.split(','):
+                try:
+                    missing_ids.append(int(id_str.strip(), 16))
+                except:
+                    pass
+    if not missing_ids:
+        messagebox.showinfo("Brak ID", "Nie udało się odczytać brakujących ID.")
+        return
+
+    intervals = report_item['details']['suggested_intervals']
+    count = 0
+    for cid in missing_ids:
+        if cid in intervals:
+            # Tworzymy pustą ramkę (dane zerowe) – można by odczytać z logu, ale to już zaawansowane
+            dummy_data = b'\x00' * 8
+            app.missing_ctrl.add_custom_frame(cid, dummy_data, cid > 0x7FF)
+            app.missing_ctrl.reference_intervals[cid] = intervals[cid]
+            count += 1
+    app.notebook.select(app.tab_missing)
+    app.log(f"[ML] Dodano {count} brakujących ramek do symulacji modułu.")
+    messagebox.showinfo("Sukces", f"Dodano {count} ramek do symulacji modułu.")

@@ -249,3 +249,21 @@ class WizardController(BaseController):
         self.app.missing_ctrl.add_custom_frame(art['id'], art['data'], art['ext'])
         self.app.notebook.select(self.app.tab_missing)
         self.log(f"[Kreator] Dodano ramkę do symulacji modułu.")
+
+    def send_to_error_sim(self):
+        if not self.app.discovered_artifacts:
+            messagebox.showinfo("Brak artefaktów", "Najpierw znajdź ramkę.")
+            return
+        name, art = list(self.app.discovered_artifacts.items())[-1]
+        self.app.error_ctrl.set_from_artifact(art['id'], art['data'], art['ext'])
+        self.app.notebook.select(self.app.tab_error)
+        self.log(f"[Kreator] Przekazano artefakt do symulacji błędów.")
+
+    def send_to_missing_sim(self):
+        if not self.app.discovered_artifacts:
+            messagebox.showinfo("Brak artefaktów", "Najpierw znajdź ramkę.")
+            return
+        name, art = list(self.app.discovered_artifacts.items())[-1]
+        self.app.missing_ctrl.add_custom_frame(art['id'], art['data'], art['ext'])
+        self.app.notebook.select(self.app.tab_missing)
+        self.log(f"[Kreator] Dodano ramkę do symulacji modułu.")

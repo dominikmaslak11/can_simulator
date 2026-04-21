@@ -108,6 +108,10 @@ def setup_wizard_tab(app, tab):
     import_btn = ttk.Button(btn_frame, text="Importuj sesję",
                             command=app.wizard_ctrl.import_session)
     import_btn.pack(side=tk.LEFT, padx=5)
+    send_error_btn = ttk.Button(btn_frame, text="Symuluj jako błąd", state='disabled', command=app.wizard_ctrl.send_to_error_sim)
+    send_error_btn.pack(side=tk.LEFT, padx=5)
+    send_missing_btn = ttk.Button(btn_frame, text="Symuluj jako moduł", state='disabled', command=app.wizard_ctrl.send_to_missing_sim)
+    send_missing_btn.pack(side=tk.LEFT, padx=5)
     send_error_btn = ttk.Button(btn_frame, text="Symuluj jako błąd", state='disabled',
                                 command=app.wizard_ctrl.send_to_error_sim)
     send_error_btn.pack(side=tk.LEFT, padx=5)
@@ -134,6 +138,8 @@ def setup_wizard_tab(app, tab):
     app.wizard_stop_btn = stop_btn
     app.wizard_undo_btn = undo_btn
     app.wizard_export_btn = export_btn
+    app.wizard_send_error_btn = send_error_btn
+    app.wizard_send_missing_btn = send_missing_btn
     app.wizard_send_error_btn = send_error_btn
     app.wizard_send_missing_btn = send_missing_btn
 

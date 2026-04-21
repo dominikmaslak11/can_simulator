@@ -1,7 +1,7 @@
 import os
 import logging
 import numpy as np
-from collections import Counter
+from collections import Counter, defaultdict
 
 logger = logging.getLogger("ML.SessionClassifier")
 
@@ -18,6 +18,12 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import StandardScaler
 from sklearn.pipeline import make_pipeline
 from sklearn.ensemble import IsolationForest
+
+try:
+    import cantools
+    CANTTOOLS_AVAILABLE = True
+except ImportError:
+    CANTTOOLS_AVAILABLE = False
 
 WINDOW_SECONDS = 5.0
 STEP_SECONDS = 1.0
@@ -47,7 +53,12 @@ class SessionClassifier:
         self.window_sec = WINDOW_SECONDS
         self.step_sec = STEP_SECONDS
         self.isolation_forest = None
-        self.normal_statistics = {}   # ID -> {'avg_interval': ..., 'std_interval': ...}
+        self.normal_statistics = {}
+        self.dbc_db = None
+        self.signal_stats = {}
+
+    def set_dbc(self, dbc_db):
+        self.dbc_db = dbc_db
 
     def _extract_features_from_window(self, frames):
         if not frames:
@@ -94,7 +105,6 @@ class SessionClassifier:
         return windows
 
     def _compute_normal_statistics(self, normal_frames):
-        """Oblicza statystyki normalnego zachowania dla każdego ID."""
         id_frames = {}
         for f in normal_frames:
             cid = f[0]
@@ -112,6 +122,26 @@ class SessionClassifier:
                 'std_interval': np.std(diffs),
                 'count': len(frames)
             }
+
+        if self.dbc_db is not None:
+            signal_values = defaultdict(list)
+            for f in normal_frames:
+                cid, data, _, ts = f
+                try:
+                    msg = self.dbc_db.get_message_by_frame_id(cid)
+                    decoded = msg.decode(data)
+                    for sig_name, val in decoded.items():
+                        signal_values[sig_name].append(val)
+                except:
+                    continue
+            for sig_name, vals in signal_values.items():
+                if len(vals) > 1:
+                    self.signal_stats[sig_name] = {
+                        'min': np.min(vals),
+                        'max': np.max(vals),
+                        'mean': np.mean(vals),
+                        'std': np.std(vals)
+                    }
 
     def prepare_training_data(self, normal_log_frames):
         windows = self._sliding_windows(normal_log_frames)
@@ -214,74 +244,114 @@ class SessionClassifier:
                 times.append(t)
         return times, probs, windows
 
-    def generate_report(self, frames, times, probs, windows, threshold=0.5):
-        """
-        Generuje raport z listą anomalnych okien i podstawową diagnozą.
-        Zwraca listę słowników.
-        """
-        report = []
-        if not self.normal_statistics:
-            # Jeśli brak statystyk, pomijamy diagnozę
-            for i, (t, p, w) in enumerate(zip(times, probs, windows)):
-                if p >= threshold:
-                    report.append({
-                        'index': i,
-                        'start_time': min(f[3] for f in w if f[3] is not None),
-                        'end_time': max(f[3] for f in w if f[3] is not None),
-                        'probability': float(p),
-                        'cause': 'Nieznana (brak danych referencyjnych)',
-                        'details': {}
-                    })
-            return report
+    def _analyze_signals_in_window(self, window_frames):
+        if self.dbc_db is None or not CANTTOOLS_AVAILABLE:
+            return [], {}
 
-        for i, (t, p, w) in enumerate(zip(times, probs, windows)):
-            if p < threshold:
+        signal_issues = []
+        details = {}
+        window_signal_values = defaultdict(list)
+
+        for f in window_frames:
+            cid, data, _, _ = f
+            try:
+                msg = self.dbc_db.get_message_by_frame_id(cid)
+                decoded = msg.decode(data)
+                for sig_name, val in decoded.items():
+                    window_signal_values[sig_name].append(val)
+            except:
                 continue
-            if not w:
+
+        for sig_name, vals in window_signal_values.items():
+            if len(vals) == 0:
+                continue
+            avg_val = np.mean(vals)
+            min_val = np.min(vals)
+            max_val = np.max(vals)
+
+            try:
+                for msg in self.dbc_db.messages:
+                    for sig in msg.signals:
+                        if sig.name == sig_name:
+                            dbc_min = sig.minimum
+                            dbc_max = sig.maximum
+                            if dbc_min is not None and min_val < dbc_min:
+                                signal_issues.append(f"{sig_name}: poniżej min ({min_val:.2f} < {dbc_min:.2f})")
+                            if dbc_max is not None and max_val > dbc_max:
+                                signal_issues.append(f"{sig_name}: powyżej max ({max_val:.2f} > {dbc_max:.2f})")
+                            break
+            except:
+                pass
+
+            if sig_name in self.signal_stats:
+                stats = self.signal_stats[sig_name]
+                if abs(avg_val - stats['mean']) > 3 * stats['std']:
+                    signal_issues.append(f"{sig_name}: odbiega od normy ({avg_val:.2f} vs {stats['mean']:.2f}±{3*stats['std']:.2f})")
+
+            details[sig_name] = {
+                'min': float(min_val),
+                'max': float(max_val),
+                'avg': float(avg_val),
+                'count': len(vals)
+            }
+
+        return signal_issues, details
+
+    def generate_report(self, frames, times, probs, windows, threshold=0.5):
+        report = []
+        for i, (t, p, w) in enumerate(zip(times, probs, windows)):
+            if p < threshold or not w:
                 continue
 
             start_time = min(f[3] for f in w if f[3] is not None)
             end_time = max(f[3] for f in w if f[3] is not None)
 
-            # Diagnoza: porównujemy z normalnymi statystykami
             causes = []
             details = {}
 
-            # 1. Sprawdź brakujące ID
             ids_in_window = set(f[0] for f in w)
-            missing_ids = set(self.normal_statistics.keys()) - ids_in_window
-            if missing_ids:
-                causes.append(f"Brakujące ID: {', '.join(hex(c) for c in list(missing_ids)[:3])}")
+            if self.normal_statistics:
+                missing_ids = set(self.normal_statistics.keys()) - ids_in_window
+                if missing_ids:
+                    causes.append(f"Brakujące ID: {', '.join(hex(c) for c in list(missing_ids)[:3])}")
+                    suggested_intervals = {}
+                    for mid in missing_ids:
+                        if mid in self.normal_statistics:
+                            suggested_intervals[mid] = self.normal_statistics[mid]['avg_interval']
+                    details['suggested_intervals'] = suggested_intervals
 
-            # 2. Sprawdź odchylenia częstotliwości dla obecnych ID
-            id_timestamps = {}
-            for f in w:
-                cid = f[0]
-                id_timestamps.setdefault(cid, []).append(f[3])
-            freq_issues = []
-            for cid, stamps in id_timestamps.items():
-                if cid not in self.normal_statistics:
-                    continue
-                if len(stamps) < 2:
-                    continue
-                diffs = np.diff(sorted(stamps))
-                avg = np.mean(diffs)
-                norm = self.normal_statistics[cid]
-                if abs(avg - norm['avg_interval']) > 2 * norm['std_interval']:
-                    freq_issues.append(f"{hex(cid)}: {avg:.3f}s (norma: {norm['avg_interval']:.3f}s)")
-            if freq_issues:
-                causes.append(f"Zmiana częstotliwości: {'; '.join(freq_issues[:2])}")
-                details['frequency'] = freq_issues
+            if self.normal_statistics:
+                id_timestamps = {}
+                for f in w:
+                    cid = f[0]
+                    id_timestamps.setdefault(cid, []).append(f[3])
+                freq_issues = []
+                for cid, stamps in id_timestamps.items():
+                    if cid not in self.normal_statistics or len(stamps) < 2:
+                        continue
+                    diffs = np.diff(sorted(stamps))
+                    avg = np.mean(diffs)
+                    norm = self.normal_statistics[cid]
+                    if abs(avg - norm['avg_interval']) > 2 * norm['std_interval']:
+                        freq_issues.append(f"{hex(cid)}: {avg:.3f}s (norma: {norm['avg_interval']:.3f}s)")
+                if freq_issues:
+                    causes.append(f"Zmiana częstotliwości: {'; '.join(freq_issues[:2])}")
+                    details['frequency'] = freq_issues
 
-            # 3. Sprawdź liczbę ramek
-            normal_total = sum(s['count'] for s in self.normal_statistics.values())
-            window_total = len(w)
-            if normal_total > 0:
-                ratio = window_total / normal_total
-                if ratio < 0.5:
-                    causes.append(f"Mało ramek: {window_total} (norma ~{normal_total})")
-                elif ratio > 2.0:
-                    causes.append(f"Dużo ramek: {window_total} (norma ~{normal_total})")
+            signal_issues, signal_details = self._analyze_signals_in_window(w)
+            if signal_issues:
+                causes.extend(signal_issues[:3])
+                details['signals'] = signal_details
+
+            if self.normal_statistics:
+                normal_total = sum(s['count'] for s in self.normal_statistics.values())
+                window_total = len(w)
+                if normal_total > 0:
+                    ratio = window_total / normal_total
+                    if ratio < 0.5:
+                        causes.append(f"Mało ramek: {window_total} (norma ~{normal_total})")
+                    elif ratio > 2.0:
+                        causes.append(f"Dużo ramek: {window_total} (norma ~{normal_total})")
 
             cause_str = '; '.join(causes) if causes else "Odchylenie statystyczne (Isolation Forest)"
 

@@ -8,3 +8,6 @@ from . import wizard_tab
 from . import sniffer_tab
 from . import chart_tab
 from . import ml_analysis_tab
+from . import pattern_tab
+from . import server_tab
+from . import generator_tab

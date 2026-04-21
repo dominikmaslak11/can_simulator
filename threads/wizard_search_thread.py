@@ -91,6 +91,10 @@ class WizardSearchThread(threading.Thread):
                     self.log(f"[Kreator] Znaleziono szukaną ramkę na indeksie {self.left}")
                     name = f"Wizard_{datetime.now().strftime('%H%M%S')}"
                     self.app.register_artifact(name, cid, data, is_ext, "Znalezione przez kreator")
+                    cid, data, is_ext, _ = self.frames[self.left]
+                    self.log(f"[Kreator] Znaleziono szukaną ramkę na indeksie {self.left}")
+                    name = f"Wizard_{datetime.now().strftime('%H%M%S')}"
+                    self.app.register_artifact(name, cid, data, is_ext, "Znalezione przez kreator")
                 else:
                     self.log(f"[Kreator] Nie znaleziono dokładnego dopasowania. Zatrzymano na indeksie {self.left}")
                 break

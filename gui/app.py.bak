@@ -7,7 +7,7 @@ import logging
 
 from can_interface import CanInterface
 from threads import SimulationThread, BinarySearchThread
-from gui.tabs import replay_tab, missing_tab, error_tab, step_tab, manual_tab, binary_tab, wizard_tab, sniffer_tab, chart_tab, ml_analysis_tab, pattern_tab, server_tab, generator_tab
+from gui.tabs import replay_tab, missing_tab, error_tab, step_tab, manual_tab, binary_tab, wizard_tab, sniffer_tab, chart_tab, ml_analysis_tab, pattern_tab, server_tab
 from gui.utils import write_log_to_file
 from controllers import (
     CanController, ReplayController, MissingController, ErrorController,
@@ -75,8 +75,6 @@ class CanSimulatorApp:
         self.discovered_artifacts = {}
 
         self._create_widgets()
-        self.bind_shortcuts()
-        self.load_session()
         logger.info("Interfejs GUI utworzony")
 
     def log(self, msg):
@@ -117,8 +115,6 @@ class CanSimulatorApp:
         self.btn_export = ttk.Button(frame_conn, text="Eksportuj projekt", command=self.export_project)
         self.btn_export.grid(row=0, column=4, padx=5)
         self.btn_import = ttk.Button(frame_conn, text="Importuj projekt", command=self.import_project)
-        self.btn_reset = ttk.Button(frame_conn, text="Resetuj sesję", command=self.reset_session)
-        self.btn_reset.grid(row=0, column=6, padx=5)
         self.btn_import.grid(row=0, column=5, padx=5)
 
         self.lbl_status = ttk.Label(frame_conn, text="Niepołączony", foreground="red")
@@ -167,9 +163,6 @@ class CanSimulatorApp:
         self.tab_ml = ttk.Frame(self.notebook)
         self.tab_pattern = ttk.Frame(self.notebook)
         self.tab_server = ttk.Frame(self.notebook)
-        self.tab_generator = ttk.Frame(self.notebook)
-        self.notebook.add(self.tab_generator, text="Generator ruchu")
-        generator_tab.setup_generator_tab(self, self.tab_generator)
         self.notebook.add(self.tab_server, text="Serwer TCP")
         server_tab.setup_server_tab(self, self.tab_server)
         self.notebook.add(self.tab_pattern, text="Analiza wzorców")
@@ -340,43 +333,15 @@ class CanSimulatorApp:
         canvas.create_text(x_right, 15, text=str(right), anchor='w', font=('Arial', 8))
         canvas.create_text(x_mid, 0, text=str(mid), anchor='s', font=('Arial', 8, 'bold'), fill='red')
 
-    
-    def bind_shortcuts(self):
-        """Przypisuje globalne skróty klawiszowe."""
-        self.root.bind('<F5>', lambda e: self.sniffer_ctrl.start_sniffer() if not self.sniffer_running else None)
-        self.root.bind('<F6>', lambda e: self.sniffer_ctrl.stop_sniffer())
-        self.root.bind('<F7>', lambda e: self.sniffer_ctrl.clear_sniffer())
-        self.root.bind('<Control-l>', lambda e: self.sniffer_ctrl.clear_sniffer())
-        self.root.bind('<Control-s>', lambda e: self.export_project())
-        self.root.bind('<Control-o>', lambda e: self.import_project())
-        # Można dodać więcej skrótów według potrzeb
-
-    
-    def reset_session(self):
-        """Resetuje zapisaną sesję."""
-        import os
-        if os.path.exists("session.json"):
-            os.remove("session.json")
-            self.log("Sesja zresetowana.")
-        else:
-            messagebox.showinfo("Reset", "Brak zapisanej sesji.")
-
-    
-    def load_session(self):
-        """Wczytuje poprzednią sesję."""
-        from session_manager import SessionManager
-        if SessionManager.load_session(self):
-            self.log("Przywrócono poprzednią sesję.")
     def on_closing(self):
         self.manual_cyclic_active = False
         if self.sim_thread:
             self.sim_thread.stop()
         if self.binary_thread:
             self.binary_thread.stop()
-        from session_manager import SessionManager
-        SessionManager.save_session(self)
         self.can.disconnect()
         self.root.destroy()
+
     def register_artifact(self, name, can_id, data, is_extended, context=""):
         self.discovered_artifacts[name] = {
             'id': can_id,

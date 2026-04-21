@@ -11,65 +11,90 @@ class SimulationThread(threading.Thread):
         self.log_cb = log_callback
         self.running = False
         self.paused = False
-        self.frames = []
+        self.frames = []               # dla trybu replay
         self.fixed_interval = 0.5
         self.loop = False
         self.speed = 1.0
         self.idx = 0
-        self.custom_frames = []
+
+        # Tryb missing – lista ramek z GUI
+        self.missing_frames = []       # lista słowników: {id, data, ext, interval, next_time}
+        self.missing_timers = {}       # id -> next_time
+
+        # Tryb error – lista ramek z GUI
+        self.error_frames = []         # lista słowników: {id, data, ext, delay}
+        self.error_interval = 10.0     # odstęp między sekwencjami
 
     def log(self, msg):
         logger.info(msg)
         if self.log_cb:
             self.log_cb(msg)
 
+    # ------------------------------------------------------------------
+    # Konfiguracja trybów
+    # ------------------------------------------------------------------
     def setup_replay(self, frames, fixed_interval, loop, speed=1.0):
+        self.mode = 'replay'
         self.frames = frames
         self.fixed_interval = fixed_interval
         self.loop = loop
         self.speed = speed
         self.idx = 0
-        self.log(f"Setup replay: {len(frames)} ramek, interwał={fixed_interval}, pętla={loop}, przysp={speed}")
+        self.log(f"Setup replay: {len(frames)} ramek, interwał={fixed_interval}")
 
-    def setup_missing_module(self, interval_8f, interval_diag, interval_sporadic, custom_frames=None):
+    def setup_missing_module(self, frames):
+        """Przyjmuje listę ramek z tabeli GUI."""
         self.mode = 'missing'
-        self.interval_8f = interval_8f
-        self.interval_diag = interval_diag
-        self.interval_sporadic = interval_sporadic
-        self.custom_frames = custom_frames or []
-        self.log(f"Setup missing module: 8F={interval_8f}, diag={interval_diag}, spor={interval_sporadic}, custom={len(self.custom_frames)}")
+        self.missing_frames = frames or []
+        # Inicjalizacja timerów – każda ramka może być wysłana natychmiast
+        now = time.time()
+        for f in self.missing_frames:
+            f['next_time'] = now
+        self.log(f"Setup missing module: {len(self.missing_frames)} ramek z GUI")
 
-    def setup_error_frames(self, interval, start_code):
+    def setup_error_frames(self, interval, frames):
+        """Przyjmuje interwał powtarzania sekwencji oraz listę ramek z tabeli GUI."""
         self.mode = 'error'
-        self.interval = interval
-        self.error_code = start_code
-        self.log(f"Setup error frames: interwał={interval}, kod start={start_code}")
+        self.error_interval = interval
+        self.error_frames = frames or []
+        self.log(f"Setup error frames: interwał sekwencji={interval}, ramek={len(self.error_frames)}")
 
+    # ------------------------------------------------------------------
+    # Główna pętla
+    # ------------------------------------------------------------------
     def run(self):
         self.running = True
         self.log(f"Start symulacji, tryb={getattr(self, 'mode', 'replay')}")
-        if hasattr(self, 'mode') and self.mode == 'missing':
-            self._run_missing_module()
-        elif hasattr(self, 'mode') and self.mode == 'error':
-            self._run_error_frames()
+        if self.mode == 'missing':
+            self._run_missing()
+        elif self.mode == 'error':
+            self._run_error()
         else:
             self._run_replay()
         self.log("Wątek symulacji zakończony")
 
     def _run_replay(self):
+        last_ts = None
         while self.running:
             if not self.paused:
                 if self.idx >= len(self.frames):
                     if self.loop:
                         self.idx = 0
+                        last_ts = None
                         self.log("--- Pętla od początku ---")
                     else:
                         break
-                can_id, data, is_ext = self.frames[self.idx]
+                can_id, data, is_ext, ts = self.frames[self.idx]
+                if ts is not None:
+                    if last_ts is not None and ts > last_ts:
+                        time.sleep((ts - last_ts) / self.speed)
+                    last_ts = ts
+                else:
+                    time.sleep(self.fixed_interval / self.speed)
+
                 success, msg = self.can.send_frame(can_id, data, is_ext)
                 self.log(msg)
                 self.idx += 1
-                time.sleep(self.fixed_interval / self.speed)
             else:
                 time.sleep(0.1)
         if not self.running:
@@ -77,97 +102,40 @@ class SimulationThread(threading.Thread):
         else:
             self.log("Zakończono odtwarzanie.")
 
-    def _run_missing_module(self):
-        counter_8F = 1
-        sent_8F = 0
-        last_8F = last_diag = last_sporadic = 0
-        toggle = 0
-
-        diag_frames = [
-            (0x0C210005, b'\x01\x01\x00\x00\x00\x00\x00\x00', False),
-            (0x0C220005, b'\x1E\xFF\x00\x00\x00\x2D\x00\x00', False),
-            (0x0C230005, b'\x28\x0A\x00\x00\x00\x06\x00\x00', False),
-            (0x08610005, b'\x06\x00\x00\x22\x02\x00\x0A\x01', False),
-            (0x08620005, b'\x00\x00\x00\x00\x00\x00\x01\x00', False),
-            (0x19202324, b'\x02\x0F\xFF\xFF\x01\xFF\xFF\xFF', True),
-            (0x19202324, b'\x04\x0F\xFF\xFF\xFF\xFF\xFF\xFF', True),
-            (0x19202324, b'\x03\x0F\xFF\xFF\xFF\xFF\xFF\xFF', True),
-            (0x19213536, b'\x01\x0F\xFF\xFF\xFF\xFF\xFF\xFF', True),
-            (0x19213536, b'\x00\x0F\xFF\xFF\xFF\xFF\xFF\xFF', True),
-            (0x18202423, b'\x02\x05\x00\x00\x00\x5A\x0F\xFF', True),
-            (0x18202423, b'\x04\x05\x00\x00\x00\x0A\x0F\xFF', True),
-            (0x18202423, b'\x03\x06\x00\x00\x00\x00\x0F\xFF', True),
-            (0x18213635, b'\x01\x05\x00\x00\x00\x00\x0F\xFF', True),
-            (0x18213635, b'\x00\x05\x00\x00\x00\x00\x0F\xFF', True),
-            (0x112A6061, b'\x02\x0F\xFF\xFF\xFF\xFF\xFF\xFF', True),
-            (0x102A6160, b'\x02\x05\x00\xFF\xFF\xFF\x0F\xFF', True),
-        ]
-
-        data_1cff = b'\x11\x00\x75\x30\x75\x30\x00\xDD'
-
+    def _run_missing(self):
+        """Wysyła każdą ramkę z listy GUI z jej własnym interwałem."""
         while self.running:
-            now = time.time()
-            if not self.paused:
-                if now - last_8F >= self.interval_8f:
-                    data = bytes([counter_8F & 0xFF, (counter_8F >> 8) & 0xFF]) + b'\x00'*6
-                    self.can.send_frame(0x0C00008F, data, True)
-                    self.log(f"[{sent_8F+1}] 0C00008F#{data.hex().upper()}")
-                    self.can.send_frame(0x1CFF66F0, data_1cff, True)
-                    self.log(f"      1CFF66F0#{data_1cff.hex().upper()}")
-                    sent_8F += 1
-                    counter_8F += 1
-                    if counter_8F > 0xFFFF:
-                        counter_8F = 1
-                    last_8F = now
-
-                # Wysyłanie niestandardowych ramek (co interwał 8F)
-                for cid, cdata, cext in self.custom_frames:
-                    self.can.send_frame(cid, cdata, cext)
-                    self.log(f"      [custom] ID=0x{cid:08X} Data={cdata.hex().upper()}")
-
-                if now - last_diag >= self.interval_diag:
-                    self.log(">> Zestaw diagnostyczny")
-                    for cid, cdata, cext in diag_frames:
-                        self.can.send_frame(cid, cdata, cext)
-                        time.sleep(0.01)
-                    last_diag = now
-
-                if now - last_sporadic >= self.interval_sporadic:
-                    if toggle % 2 == 0:
-                        d1 = b'\xFF\xFF\xFF\xFF\x9F\x01\xFF\xFF'
-                        d2 = b'\x00\x96\x00\x00\x95\x01\x0F\xFF'
-                    else:
-                        d1 = b'\xFF\x00\xFF\x00\x9F\x00\xFF\xFF'
-                        d2 = b'\x00\x96\x00\x00\x95\x00\x0F\xFF'
-                    self.can.send_frame(0x11204032, d1, True)
-                    self.can.send_frame(0x10203240, d2, True)
-                    self.log(">> Ramki sporadyczne")
-                    toggle += 1
-                    last_sporadic = now
-            time.sleep(0.05)
-        self.log("Symulacja modułu zakończona.")
-
-    def _run_error_frames(self):
-        sent = 0
-        code = self.error_code
-        while self.running:
-            if not self.paused:
-                data_err = bytes([0x00, code & 0xFF]) + b'\x00'*6
-                self.can.send_frame(0x0C000005, data_err, False)
-                self.log(f"[{sent+1}] 0C000005#{data_err.hex().upper()}")
-                time.sleep(0.25)
-                data_diag = bytes([0x00, 0x16, 0x0B, 0x04, 0x03, 0x09, 0xA0 | (code & 0x0F), 0x00])
-                self.can.send_frame(0x14200032, data_diag, True)
-                self.log(f"      14200032#{data_diag.hex().upper()}")
-                sent += 1
-                code += 1
-                if code > 0xFF:
-                    code = self.error_code
-                time.sleep(self.interval - 0.25)
-            else:
+            if self.paused:
                 time.sleep(0.1)
-        self.log("Symulacja błędów zakończona.")
+                continue
 
+            now = time.time()
+            for f in self.missing_frames:
+                if now >= f['next_time']:
+                    self.can.send_frame(f['id'], f['data'], f['ext'])
+                    self.log(f"[Missing] ID=0x{f['id']:08X} Data={f['data'].hex().upper()}")
+                    f['next_time'] = now + f['interval']
+            time.sleep(0.01)  # mała pauza, aby nie obciążać CPU
+
+    def _run_error(self):
+        """Wysyła całą sekwencję ramek z tabeli, powtarzając co error_interval."""
+        while self.running:
+            if self.paused:
+                time.sleep(0.1)
+                continue
+
+            for f in self.error_frames:
+                if not self.running:
+                    break
+                self.can.send_frame(f['id'], f['data'], f['ext'])
+                self.log(f"[Error] ID=0x{f['id']:08X} Data={f['data'].hex().upper()}")
+                time.sleep(f['delay'])
+            # Odstęp przed kolejną sekwencją
+            time.sleep(self.error_interval)
+
+    # ------------------------------------------------------------------
+    # Sterowanie
+    # ------------------------------------------------------------------
     def stop(self):
         self.running = False
 
