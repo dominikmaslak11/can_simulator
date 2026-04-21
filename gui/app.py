@@ -18,6 +18,7 @@ from gui.binary_handlers import BinaryHandlers
 # Nowe komponenty
 from sequence_analyzer import SequenceAnalyzer
 from session_manager import SessionManager
+from report_generator import ReportGenerator
 
 logger = logging.getLogger("App")
 
@@ -129,6 +130,8 @@ class CanSimulatorApp(ConnectionHandlers, SimulationHandlers, BinaryHandlers):
         menubar.add_cascade(label="Plik", menu=file_menu)
         file_menu.add_command(label="Zapisz sesję jako...", command=self.save_session)
         file_menu.add_command(label="Wczytaj sesję...", command=self.load_session)
+        file_menu.add_separator()
+        file_menu.add_command(label="Generuj raport...", command=self.generate_report)
         file_menu.add_separator()
         file_menu.add_command(label="Wyjście", command=self.on_closing)
 
@@ -296,6 +299,50 @@ class CanSimulatorApp(ConnectionHandlers, SimulationHandlers, BinaryHandlers):
             self.log("[Test alertu] Zakończono.")
 
         threading.Thread(target=_test_worker, daemon=True).start()
+
+    def generate_report(self):
+        """Generuje raport z bieżącej sesji i zapisuje do pliku."""
+        state = {
+            "replay": {
+                "file_path": self.replay_file_var.get(),
+                "interval": self.replay_interval.get(),
+                "speed": self.replay_speed.get(),
+                "loop": self.replay_loop.get(),
+            },
+            "binary": {
+                "file_path": self.binary_file_var.get(),
+                "interval": self.binary_interval.get(),
+                "mode": self.binary_mode.get(),
+                "hunt_alert_id": self.hunt_alert_id.get(),
+                "hunt_period": self.hunt_period.get(),
+                "hunt_tolerance": self.hunt_tolerance.get(),
+                "hunt_start_index": self.hunt_start_index.get(),
+            },
+            "frames": {
+                "loaded": [(cid, data.hex(), is_ext) for (cid, data, is_ext) in self.loaded_frames],
+                "binary": [(cid, data.hex(), is_ext) for (cid, data, is_ext) in self.binary_frames],
+            },
+            "history": {
+                "binary_history": getattr(self.binary_thread, 'history', []) if self.binary_thread else []
+            }
+        }
+
+        report_text = ReportGenerator.generate(state)
+
+        filepath = filedialog.asksaveasfilename(
+            defaultextension=".txt",
+            filetypes=[("Pliki tekstowe", "*.txt"), ("Wszystkie pliki", "*.*")]
+        )
+        if not filepath:
+            return
+
+        try:
+            with open(filepath, 'w', encoding='utf-8') as f:
+                f.write(report_text)
+            self.log(f"Raport zapisany do {filepath}")
+            messagebox.showinfo("Raport zapisany", f"Raport został zapisany do:\n{filepath}")
+        except Exception as e:
+            messagebox.showerror("Błąd", f"Nie udało się zapisać raportu: {e}")
 
     def on_closing(self):
         self.manual_cyclic_active = False
