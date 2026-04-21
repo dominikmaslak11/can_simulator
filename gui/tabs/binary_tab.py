@@ -65,6 +65,12 @@ def setup_binary_tab(app, tab):
     import_btn = ttk.Button(btn_frame, text="Importuj sesję",
                             command=lambda: import_binary_session(app))
     import_btn.pack(side=tk.LEFT, padx=5)
+    send_error_btn = ttk.Button(btn_frame, text="Symuluj jako błąd", state='disabled',
+                                command=lambda: app.binary_ctrl.send_to_error_sim())
+    send_error_btn.pack(side=tk.LEFT, padx=5)
+    send_missing_btn = ttk.Button(btn_frame, text="Symuluj jako moduł", state='disabled',
+                                  command=lambda: app.binary_ctrl.send_to_missing_sim())
+    send_missing_btn.pack(side=tk.LEFT, padx=5)
     ttk.Button(btn_frame, text="Reset", command=lambda: reset_binary_search(app)).pack(side=tk.LEFT, padx=5)
 
     app.binary_file_var = file_var
@@ -81,6 +87,8 @@ def setup_binary_tab(app, tab):
     app.binary_stop_btn = stop_btn
     app.binary_undo_btn = undo_btn
     app.binary_export_btn = export_btn
+    app.binary_send_error_btn = send_error_btn
+    app.binary_send_missing_btn = send_missing_btn
 
     start_btn.config(command=app.binary_ctrl.start_binary_search)
     yes_btn.config(command=app.binary_ctrl.binary_answer_yes)
@@ -114,6 +122,8 @@ def reset_binary_search(app):
     app.binary_stop_btn.config(state='disabled')
     app.binary_undo_btn.config(state='disabled')
     app.binary_export_btn.config(state='disabled')
+    app.binary_send_error_btn.config(state='disabled')
+    app.binary_send_missing_btn.config(state='disabled')
     app.binary_progress.config(text="Zakres: --")
     app._redraw_binary_progress()
     app.log("[Binary] Reset.")
@@ -164,7 +174,8 @@ def import_binary_session(app):
     if session['settings'].get('num_parts'):
         app.binary_parts.set(session['settings']['num_parts'])
 
-    app._start_binary_thread(lambda *a, **kw: None)  # uproszczony callback – w praktyce trzeba odtworzyć ask_callback
+    def ask_callback(*a, **kw): return False
+    app._start_binary_thread(ask_callback)
     SessionManager.restore_state(app.binary_thread, session)
     app._update_binary_progress()
     app.binary_export_btn.config(state='normal')

@@ -87,7 +87,10 @@ class WizardSearchThread(threading.Thread):
 
             if self.left == self.right:
                 if self._matches(self.frames[self.left]):
+                    cid, data, is_ext, _ = self.frames[self.left]
                     self.log(f"[Kreator] Znaleziono szukaną ramkę na indeksie {self.left}")
+                    name = f"Wizard_{datetime.now().strftime('%H%M%S')}"
+                    self.app.register_artifact(name, cid, data, is_ext, "Znalezione przez kreator")
                 else:
                     self.log(f"[Kreator] Nie znaleziono dokładnego dopasowania. Zatrzymano na indeksie {self.left}")
                 break
@@ -154,6 +157,9 @@ class WizardSearchThread(threading.Thread):
         self.app.wizard_undo_btn.config(state='disabled')
         if hasattr(self.app, 'wizard_export_btn'):
             self.app.wizard_export_btn.config(state='disabled')
+        if hasattr(self.app, 'wizard_send_error_btn'):
+            self.app.wizard_send_error_btn.config(state='normal')
+            self.app.wizard_send_missing_btn.config(state='normal')
 
     def stop(self):
         self.running = False

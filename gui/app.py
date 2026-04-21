@@ -57,6 +57,9 @@ class CanSimulatorApp:
         self.sniffer_lock = threading.Lock()
         self.sniffer_last_data = {}
 
+        # Rejestr artefaktów
+        self.discovered_artifacts = {}
+
         # Kontrolery
         self.can_ctrl = CanController(self)
         self.replay_ctrl = ReplayController(self)
@@ -84,6 +87,15 @@ class CanSimulatorApp:
             log_path = self.replay_log_var.get()
             if log_path:
                 write_log_to_file(log_path, msg)
+
+    def register_artifact(self, name, can_id, data, is_extended, context=""):
+        self.discovered_artifacts[name] = {
+            'id': can_id,
+            'data': data,
+            'ext': is_extended,
+            'context': context
+        }
+        self.log(f"[Artefakt] Zarejestrowano '{name}': ID=0x{can_id:08X}")
 
     def _create_widgets(self):
         # Połączenie CAN
@@ -203,12 +215,11 @@ class CanSimulatorApp:
         self.replay_pause_btn.config(state='disabled')
         self.replay_stop_btn.config(state='disabled')
 
-    # Wyszukiwanie binarne – pomocnicze
     def _start_binary_thread(self, ask_callback):
         mode = self.binary_mode.get()
         num_parts = self.binary_parts.get() if mode == 'manual_parts' else 2
         self.binary_thread = BinarySearchThread(
-            self.can, self.log, ask_callback, self._binary_done, self._update_binary_progress
+            self.can, self.log, ask_callback, self._binary_done, self._update_binary_progress, app=self
         )
         self.binary_thread.setup(
             self.binary_frames,
@@ -267,10 +278,12 @@ class CanSimulatorApp:
             btn.config(state='disabled')
         if hasattr(self, 'binary_export_btn') and self.binary_export_btn:
             self.binary_export_btn.config(state='disabled')
+        if hasattr(self, 'binary_send_error_btn'):
+            self.binary_send_error_btn.config(state='normal')
+            self.binary_send_missing_btn.config(state='normal')
         self.binary_progress.config(text="Wyszukiwanie zakończone.")
         self._redraw_binary_progress()
 
-    # Kreator
     def _update_wizard_progress(self):
         if self.wizard_frames:
             total = len(self.wizard_frames)

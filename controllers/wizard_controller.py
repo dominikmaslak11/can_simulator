@@ -85,6 +85,9 @@ class WizardController(BaseController):
         self.app.wizard_undo_btn.config(state='disabled')
         if hasattr(self.app, 'wizard_export_btn'):
             self.app.wizard_export_btn.config(state='disabled')
+        if hasattr(self.app, 'wizard_send_error_btn'):
+            self.app.wizard_send_error_btn.config(state='disabled')
+            self.app.wizard_send_missing_btn.config(state='disabled')
         self.app.wizard_progress.config(text="Postęp: --")
         self.app.wizard_left = 0
         self.app.wizard_right = len(self.app.wizard_frames) - 1 if self.app.wizard_frames else 0
@@ -228,3 +231,21 @@ class WizardController(BaseController):
         self.app._update_wizard_progress()
         self.app.wizard_start_btn.config(state='normal')
         self.log(f"[Kreator] Sesja zaimportowana z {filepath}")
+
+    def send_to_error_sim(self):
+        if not self.app.discovered_artifacts:
+            messagebox.showinfo("Brak artefaktów", "Najpierw znajdź ramkę.")
+            return
+        name, art = list(self.app.discovered_artifacts.items())[-1]
+        self.app.error_ctrl.set_from_artifact(art['id'], art['data'], art['ext'])
+        self.app.notebook.select(self.app.tab_error)
+        self.log(f"[Kreator] Przekazano artefakt do symulacji błędów.")
+
+    def send_to_missing_sim(self):
+        if not self.app.discovered_artifacts:
+            messagebox.showinfo("Brak artefaktów", "Najpierw znajdź ramkę.")
+            return
+        name, art = list(self.app.discovered_artifacts.items())[-1]
+        self.app.missing_ctrl.add_custom_frame(art['id'], art['data'], art['ext'])
+        self.app.notebook.select(self.app.tab_missing)
+        self.log(f"[Kreator] Dodano ramkę do symulacji modułu.")

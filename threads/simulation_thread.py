@@ -11,34 +11,33 @@ class SimulationThread(threading.Thread):
         self.log_cb = log_callback
         self.running = False
         self.paused = False
-        self.frames = []               # każdy element: (can_id, data, is_ext, timestamp)
+        self.frames = []
         self.fixed_interval = 0.5
-        self.use_timestamps = False
         self.loop = False
         self.speed = 1.0
         self.idx = 0
+        self.custom_frames = []
 
     def log(self, msg):
         logger.info(msg)
         if self.log_cb:
             self.log_cb(msg)
 
-    def setup_replay(self, frames, fixed_interval, loop, speed=1.0, use_timestamps=False):
+    def setup_replay(self, frames, fixed_interval, loop, speed=1.0):
         self.frames = frames
         self.fixed_interval = fixed_interval
         self.loop = loop
         self.speed = speed
-        self.use_timestamps = use_timestamps
         self.idx = 0
-        self.log(f"Setup replay: {len(frames)} ramek, interwał={fixed_interval}, "
-                 f"timestamps={use_timestamps}, pętla={loop}, przysp={speed}")
+        self.log(f"Setup replay: {len(frames)} ramek, interwał={fixed_interval}, pętla={loop}, przysp={speed}")
 
-    def setup_missing_module(self, interval_8f, interval_diag, interval_sporadic):
+    def setup_missing_module(self, interval_8f, interval_diag, interval_sporadic, custom_frames=None):
         self.mode = 'missing'
         self.interval_8f = interval_8f
         self.interval_diag = interval_diag
         self.interval_sporadic = interval_sporadic
-        self.log(f"Setup missing module: 8F={interval_8f}, diag={interval_diag}, spor={interval_sporadic}")
+        self.custom_frames = custom_frames or []
+        self.log(f"Setup missing module: 8F={interval_8f}, diag={interval_diag}, spor={interval_sporadic}, custom={len(self.custom_frames)}")
 
     def setup_error_frames(self, interval, start_code):
         self.mode = 'error'
@@ -58,29 +57,19 @@ class SimulationThread(threading.Thread):
         self.log("Wątek symulacji zakończony")
 
     def _run_replay(self):
-        last_ts = None
         while self.running:
             if not self.paused:
                 if self.idx >= len(self.frames):
                     if self.loop:
                         self.idx = 0
-                        last_ts = None
                         self.log("--- Pętla od początku ---")
                     else:
                         break
-                can_id, data, is_ext, ts = self.frames[self.idx]
-                if self.use_timestamps and ts is not None:
-                    if last_ts is not None and ts > last_ts:
-                        delay = (ts - last_ts) / self.speed
-                        if delay > 0:
-                            time.sleep(delay)
-                    last_ts = ts
-                else:
-                    time.sleep(self.fixed_interval / self.speed)
-
+                can_id, data, is_ext = self.frames[self.idx]
                 success, msg = self.can.send_frame(can_id, data, is_ext)
                 self.log(msg)
                 self.idx += 1
+                time.sleep(self.fixed_interval / self.speed)
             else:
                 time.sleep(0.1)
         if not self.running:
@@ -109,7 +98,7 @@ class SimulationThread(threading.Thread):
             (0x18202423, b'\x04\x05\x00\x00\x00\x0A\x0F\xFF', True),
             (0x18202423, b'\x03\x06\x00\x00\x00\x00\x0F\xFF', True),
             (0x18213635, b'\x01\x05\x00\x00\x00\x00\x0F\xFF', True),
-            (0x18213635, b'\x00\x05\x00\x00\x00\x00\x0F\xFF', True),  # drobna korekta danych
+            (0x18213635, b'\x00\x05\x00\x00\x00\x00\x0F\xFF', True),
             (0x112A6061, b'\x02\x0F\xFF\xFF\xFF\xFF\xFF\xFF', True),
             (0x102A6160, b'\x02\x05\x00\xFF\xFF\xFF\x0F\xFF', True),
         ]
@@ -130,6 +119,11 @@ class SimulationThread(threading.Thread):
                     if counter_8F > 0xFFFF:
                         counter_8F = 1
                     last_8F = now
+
+                # Wysyłanie niestandardowych ramek (co interwał 8F)
+                for cid, cdata, cext in self.custom_frames:
+                    self.can.send_frame(cid, cdata, cext)
+                    self.log(f"      [custom] ID=0x{cid:08X} Data={cdata.hex().upper()}")
 
                 if now - last_diag >= self.interval_diag:
                     self.log(">> Zestaw diagnostyczny")

@@ -6,7 +6,6 @@ import logging
 import numpy as np
 from datetime import datetime
 
-# Importy ML – próbujemy sekwencyjnego, w razie braku przełączamy na stary
 try:
     from ml.feature_extractor import extract_sequential_features
     from ml.sequential_model import SequentialMLModel
@@ -14,7 +13,6 @@ try:
 except ImportError:
     SEQUENTIAL_AVAILABLE = False
 
-# Stary model zawsze dostępny jako fallback
 from ml.feature_extractor import extract_features
 from ml.model import MLModel
 
@@ -24,13 +22,14 @@ logger = logging.getLogger("BinarySearchThread")
 
 
 class BinarySearchThread(threading.Thread):
-    def __init__(self, can_if, log_callback, ask_callback, done_callback, state_update_callback=None):
+    def __init__(self, can_if, log_callback, ask_callback, done_callback, state_update_callback=None, app=None):
         super().__init__(daemon=True)
         self.can = can_if
         self.log_cb = log_callback
         self.ask = ask_callback
         self.done = done_callback
         self.state_update = state_update_callback
+        self.app = app
         self.running = False
         self.frames = []
         self.interval = 0.5
@@ -44,7 +43,6 @@ class BinarySearchThread(threading.Thread):
         self.history = []
         self.waiting_for_answer = threading.Event()
 
-        # Wybór modelu: preferujemy sekwencyjny, jeśli dostępny
         if SEQUENTIAL_AVAILABLE:
             try:
                 self.ml_model = SequentialMLModel()
@@ -123,47 +121,36 @@ class BinarySearchThread(threading.Thread):
         self.log("Wyszukiwanie zakończone.")
 
     def _smart_split_point(self):
-        """
-        Analizuje zakres [left, right] i zwraca sugerowany indeks podziału (mid).
-        Uwzględnia gęstość ramek, zmienność danych oraz predykcję modelu ML.
-        """
         total = self.right - self.left + 1
         if total < 10:
             return (self.left + self.right) // 2
 
-        # Pobieramy cechy z modelu ML (jeśli dostępny)
         if self.ml_model is not None and hasattr(self.ml_model, 'predict_proba'):
             try:
                 feats = self._extract_features_for_range(self.left, self.right)
                 if feats is not None:
                     prob = self.ml_model.predict_proba(feats)
-                    # Jeśli model jest pewny, że granica jest blisko, zawężamy przeszukiwanie
                     if prob > 0.7:
-                        # Przeszukujemy węższy zakres wokół środka
                         offset = int(total * 0.15)
                         return min(self.right, max(self.left, (self.left + self.right) // 2 + np.random.randint(-offset, offset)))
             except Exception:
                 pass
 
-        # Analiza gęstości ramek (odstępy czasowe)
         if self.use_timestamps:
             timestamps = [self.frames[i][3] for i in range(self.left, self.right + 1) if self.frames[i][3] is not None]
             if len(timestamps) > 2:
                 diffs = np.diff(timestamps)
                 avg_diff = np.mean(diffs)
-                # Szukamy miejsc, gdzie odstęp jest znacznie większy niż średnia – naturalna granica
                 for i in range(1, len(diffs)):
                     if diffs[i] > 2.0 * avg_diff:
                         candidate = self.left + i
                         if self.left < candidate < self.right:
                             return candidate
 
-        # Analiza zmienności danych – szukamy "skoku" w zawartości ramek
         data_variability = []
         for i in range(self.left, self.right):
             curr_data = self.frames[i][1]
             next_data = self.frames[i+1][1]
-            # Prosta miara: liczba różnych bajtów
             diff = sum(a != b for a, b in zip(curr_data, next_data))
             data_variability.append(diff)
         if data_variability:
@@ -171,12 +158,10 @@ class BinarySearchThread(threading.Thread):
             if self.left < max_idx < self.right:
                 return max_idx
 
-        # Domyślnie: podział na pół
         return (self.left + self.right) // 2
 
     def _run_binary(self):
         while self.running and self.left <= self.right:
-            # Użyj inteligentnego podziału zamiast sztywnego //2
             self.mid = self._smart_split_point()
             if self.mode == 'find_start':
                 start, end = self.left, self.mid - 1
@@ -217,6 +202,9 @@ class BinarySearchThread(threading.Thread):
             if self.left == self.right:
                 cid, data, is_ext, _ = self.frames[self.left]
                 self.log(f">>> Znaleziono ramkę: ID=0x{cid:08X} Data={data.hex().upper()} (indeks {self.left}) <<<")
+                if self.app:
+                    name = f"Binary_{self.mode}_{datetime.now().strftime('%H%M%S')}"
+                    self.app.register_artifact(name, cid, data, is_ext, f"Znalezione przez wyszukiwanie binarne ({self.mode})")
                 self.ml_model.train()
                 break
 
@@ -273,6 +261,9 @@ class BinarySearchThread(threading.Thread):
             if self.left == self.right:
                 cid, data, is_ext, _ = self.frames[self.left]
                 self.log(f">>> Znaleziono ramkę: ID=0x{cid:08X} Data={data.hex().upper()} (indeks {self.left}) <<<")
+                if self.app:
+                    name = f"Binary_manual_{datetime.now().strftime('%H%M%S')}"
+                    self.app.register_artifact(name, cid, data, is_ext, "Znalezione przez wyszukiwanie binarne (manualne)")
                 self.ml_model.train()
                 break
 
@@ -283,7 +274,6 @@ class BinarySearchThread(threading.Thread):
                     self.num_parts = new
 
     def _extract_features_for_range(self, start, end):
-        """Wybiera odpowiednią ekstrakcję cech w zależności od używanego modelu."""
         if start > end:
             return None
         frames_slice = self.frames[start:end + 1]
@@ -293,7 +283,6 @@ class BinarySearchThread(threading.Thread):
             return extract_features(frames_slice)
 
     def _play_range(self, start, end):
-        # Ekstrakcja cech dla całego odtwarzanego przedziału
         if start <= end:
             self.last_played_features = self._extract_features_for_range(start, end)
         else:
@@ -318,7 +307,6 @@ class BinarySearchThread(threading.Thread):
         self.running = False
         self.waiting_for_answer.set()
 
-    # ---------- Eksport sesji ----------
     def export_session(self, settings, source_file, result=None):
         return SessionManager.export_session(
             self, 'binary', settings, source_file, len(self.frames), result

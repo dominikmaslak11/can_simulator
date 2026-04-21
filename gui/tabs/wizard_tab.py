@@ -108,6 +108,12 @@ def setup_wizard_tab(app, tab):
     import_btn = ttk.Button(btn_frame, text="Importuj sesję",
                             command=app.wizard_ctrl.import_session)
     import_btn.pack(side=tk.LEFT, padx=5)
+    send_error_btn = ttk.Button(btn_frame, text="Symuluj jako błąd", state='disabled',
+                                command=app.wizard_ctrl.send_to_error_sim)
+    send_error_btn.pack(side=tk.LEFT, padx=5)
+    send_missing_btn = ttk.Button(btn_frame, text="Symuluj jako moduł", state='disabled',
+                                  command=app.wizard_ctrl.send_to_missing_sim)
+    send_missing_btn.pack(side=tk.LEFT, padx=5)
     ttk.Button(btn_frame, text="Reset", command=app.wizard_ctrl.reset).pack(side=tk.LEFT, padx=5)
 
     app.wizard_file_var = file_var
@@ -128,6 +134,8 @@ def setup_wizard_tab(app, tab):
     app.wizard_stop_btn = stop_btn
     app.wizard_undo_btn = undo_btn
     app.wizard_export_btn = export_btn
+    app.wizard_send_error_btn = send_error_btn
+    app.wizard_send_missing_btn = send_missing_btn
 
     start_btn.config(command=app.wizard_ctrl.start_search)
     yes_btn.config(command=app.wizard_ctrl.answer_yes)
@@ -141,7 +149,6 @@ def browse_wizard_file(file_var):
         file_var.set(path)
 
 
-# Funkcje pomocnicze dla zgodności z app.py
 def _update_wizard_progress(app):
     if app.wizard_frames:
         total = len(app.wizard_frames)
