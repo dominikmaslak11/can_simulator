@@ -1,6 +1,8 @@
 import tkinter as tk
 from tkinter import ttk, scrolledtext, messagebox, filedialog
 import logging
+import threading
+import time
 from datetime import datetime
 
 # Interfejsy CAN
@@ -271,6 +273,29 @@ class CanSimulatorApp(ConnectionHandlers, SimulationHandlers, BinaryHandlers):
         self.manual_extended.set(is_extended)
         self.notebook.select(self.tab_manual)
         self.log(f"Przekazano ID=0x{can_id:08X} do symulacji.")
+
+    def quick_test_alert(self, can_id, data, is_extended, period=1.0, duration=10.0):
+        """
+        Uruchamia krótki test wysyłania ramki przez określony czas.
+        """
+        if not self.can or not self.can.connected:
+            messagebox.showerror("Błąd", "Połącz się z CAN przed testem.")
+            return
+
+        def _test_worker():
+            self.log(f"[Test alertu] Rozpoczęto wysyłanie ID=0x{can_id:08X} co {period}s przez {duration}s")
+            end_time = time.time() + duration
+            while time.time() < end_time:
+                success, msg = self.can.send_frame(can_id, data, is_extended)
+                if success:
+                    self.log(f"[Test alertu] {msg}")
+                else:
+                    self.log(f"[Test alertu] Błąd: {msg}")
+                    break
+                time.sleep(period)
+            self.log("[Test alertu] Zakończono.")
+
+        threading.Thread(target=_test_worker, daemon=True).start()
 
     def on_closing(self):
         self.manual_cyclic_active = False
