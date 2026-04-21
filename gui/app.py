@@ -10,10 +10,11 @@ from socketcan_interface import SocketCANInterface
 from dummy_interface import DummyInterface
 
 # Zakładki i mixiny
-from gui.tabs import replay_tab, missing_tab, error_tab, step_tab, manual_tab, binary_tab
+from gui.tabs import replay_tab, missing_tab, error_tab, step_tab, manual_tab, binary_tab, wizard_tab
 from gui.handlers import ConnectionHandlers
 from gui.simulation_handlers import SimulationHandlers
 from gui.binary_handlers import BinaryHandlers
+from gui.wizard_handlers import WizardHandlers
 
 # Nowe komponenty
 from sequence_analyzer import SequenceAnalyzer
@@ -23,7 +24,7 @@ from report_generator import ReportGenerator
 logger = logging.getLogger("App")
 
 
-class CanSimulatorApp(ConnectionHandlers, SimulationHandlers, BinaryHandlers):
+class CanSimulatorApp(ConnectionHandlers, SimulationHandlers, BinaryHandlers, WizardHandlers):
     def __init__(self, root):
         self.root = root
         self.root.title("CAN Simulator GUI")
@@ -111,6 +112,10 @@ class CanSimulatorApp(ConnectionHandlers, SimulationHandlers, BinaryHandlers):
         self.tab_binary = ttk.Frame(self.notebook)
         self.notebook.add(self.tab_binary, text="Wyszukiwanie binarne")
         binary_tab.setup_binary_tab(self, self.tab_binary)
+
+        self.tab_wizard = ttk.Frame(self.notebook)
+        self.notebook.add(self.tab_wizard, text="Kreator")
+        wizard_tab.setup_wizard_tab(self, self.tab_wizard)
 
         # --- Log ---
         frame_log = ttk.LabelFrame(self.root, text="Log", padding=5)
