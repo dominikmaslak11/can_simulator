@@ -61,6 +61,10 @@ def setup_ml_tab(app, tab):
                                   command=lambda: detect_anomalies(app, test_var.get()))
     unsupervised_btn.pack(side=tk.LEFT, padx=5)
 
+    report_btn = ttk.Button(btn_frame, text="Pokaż raport anomalii",
+                            command=lambda: show_anomaly_report(app), state='disabled')
+    report_btn.pack(side=tk.LEFT, padx=5)
+
     ttk.Label(btn_frame, text="Próg anomalii:").pack(side=tk.LEFT, padx=(20, 5))
     threshold_var = tk.DoubleVar(value=0.5)
     threshold_scale = ttk.Scale(btn_frame, from_=0.0, to=1.0, variable=threshold_var,
@@ -95,10 +99,18 @@ def setup_ml_tab(app, tab):
     app.ml_canvas = canvas
     app.ml_status = status_var
     app.ml_threshold = threshold_var
+    app.ml_report_btn = report_btn
     app.ml_classifier = SessionClassifier()
     app.ml_train_frames = None
     app.ml_test_frames = None
     app.ml_anomaly_frames = None
+
+    app.ml_last_windows = []
+    app.ml_last_rel_times = []
+    app.ml_last_probs = []
+    app.ml_last_report = []
+
+    fig.canvas.mpl_connect('button_press_event', lambda event: on_plot_click(app, event))
 
 
 def browse_file(var):
@@ -152,8 +164,8 @@ def analyze_log(app, test_path):
     app.root.update()
 
     def analyze_thread():
-        times, probs = app.ml_classifier.predict_proba(test_frames)
-        app.root.after(0, lambda: draw_results(app, times, probs, test_frames))
+        times, probs, windows = app.ml_classifier.predict_proba(test_frames)
+        app.root.after(0, lambda: draw_results(app, times, probs, windows, test_frames, "Analiza nadzorowana"))
 
     threading.Thread(target=analyze_thread, daemon=True).start()
 
@@ -172,13 +184,13 @@ def detect_anomalies(app, test_path):
     app.root.update()
 
     def detect_thread():
-        times, probs = app.ml_classifier.detect_anomalies_unsupervised(test_frames)
-        app.root.after(0, lambda: draw_results(app, times, probs, test_frames, title="Wykrywanie anomalii (bez nadzoru)"))
+        times, probs, windows = app.ml_classifier.detect_anomalies_unsupervised(test_frames)
+        app.root.after(0, lambda: draw_results(app, times, probs, windows, test_frames, "Wykrywanie anomalii (bez nadzoru)"))
 
     threading.Thread(target=detect_thread, daemon=True).start()
 
 
-def draw_results(app, times, probs, test_frames, title="Analiza nadzorowana"):
+def draw_results(app, times, probs, windows, test_frames, title="Analiza"):
     if len(times) == 0:
         app.ml_status.set("Brak danych do wyświetlenia.")
         return
@@ -199,6 +211,127 @@ def draw_results(app, times, probs, test_frames, title="Analiza nadzorowana"):
     ax.grid(True, linestyle='--', alpha=0.7)
     app.ml_canvas.draw()
 
+    app.ml_last_rel_times = rel_times
+    app.ml_last_probs = probs
+    app.ml_last_windows = windows
+    app.ml_test_frames = test_frames
+
+    # Generuj raport
+    app.ml_last_report = app.ml_classifier.generate_report(
+        test_frames, times, probs, windows, app.ml_threshold.get()
+    )
+
     anomaly_count = sum(1 for p in probs if p >= app.ml_threshold.get())
     app.ml_status.set(f"Analiza zakończona. Wykryto {anomaly_count} anomalii.")
+    app.ml_report_btn.config(state='normal')
     app.log(f"[ML] {title} – wykryto {anomaly_count} anomalii.")
+
+
+def on_plot_click(app, event):
+    if event.inaxes != app.ml_ax:
+        return
+    if not hasattr(app, 'ml_last_windows') or not app.ml_last_windows:
+        return
+    x = event.xdata
+    if x is None:
+        return
+
+    rel_times = app.ml_last_rel_times
+    windows = app.ml_last_windows
+
+    idx = np.argmin(np.abs(np.array(rel_times) - x))
+    window = windows[idx]
+    if not window:
+        return
+
+    timestamps_in_window = [f[3] for f in window if f[3] is not None]
+    if not timestamps_in_window:
+        return
+
+    start_time = min(timestamps_in_window)
+    end_time = max(timestamps_in_window)
+
+    if hasattr(app, 'sniffer_ctrl'):
+        app.sniffer_ctrl.highlight_time_range(start_time, end_time)
+        app.log(f"[ML] Podświetlono ramki w zakresie {start_time:.3f} – {end_time:.3f}")
+
+
+def show_anomaly_report(app):
+    if not app.ml_last_report:
+        messagebox.showinfo("Brak raportu", "Najpierw przeprowadź analizę.")
+        return
+
+    win = tk.Toplevel(app.root)
+    win.title("Raport anomalii")
+    win.geometry("1000x500")
+    win.transient(app.root)
+    win.grab_set()
+
+    frame = ttk.Frame(win, padding=10)
+    frame.pack(fill=tk.BOTH, expand=True)
+
+    columns = ('start', 'end', 'prob', 'cause')
+    tree = ttk.Treeview(frame, columns=columns, show='headings', height=12)
+    tree.heading('start', text='Początek [s]')
+    tree.heading('end', text='Koniec [s]')
+    tree.heading('prob', text='Prawdop.')
+    tree.heading('cause', text='Przyczyna')
+
+    tree.column('start', width=120)
+    tree.column('end', width=120)
+    tree.column('prob', width=80)
+    tree.column('cause', width=500)
+
+    vsb = ttk.Scrollbar(frame, orient="vertical", command=tree.yview)
+    tree.configure(yscrollcommand=vsb.set)
+    tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+    vsb.pack(side=tk.RIGHT, fill=tk.Y)
+
+    for r in app.ml_last_report:
+        start = r['start_time']
+        end = r['end_time']
+        t0 = app.ml_last_windows[0][0][3] if app.ml_last_windows[0] else start
+        tree.insert("", tk.END, values=(
+            f"{start - t0:.3f}",
+            f"{end - t0:.3f}",
+            f"{r['probability']:.2f}",
+            r['cause']
+        ))
+
+    def on_select(event):
+        sel = tree.selection()
+        if not sel:
+            return
+        idx = tree.index(sel[0])
+        if idx < len(app.ml_last_report):
+            r = app.ml_last_report[idx]
+            if hasattr(app, 'sniffer_ctrl'):
+                app.sniffer_ctrl.highlight_time_range(r['start_time'], r['end_time'])
+
+    tree.bind('<<TreeviewSelect>>', on_select)
+
+    btn_frame = ttk.Frame(win)
+    btn_frame.pack(pady=10)
+    ttk.Button(btn_frame, text="Eksportuj raport", command=lambda: export_report(app)).pack(side=tk.LEFT, padx=5)
+    ttk.Button(btn_frame, text="Zamknij", command=win.destroy).pack(side=tk.LEFT, padx=5)
+
+
+def export_report(app):
+    if not app.ml_last_report:
+        return
+    filepath = filedialog.asksaveasfilename(defaultextension=".csv", filetypes=[("CSV", "*.csv")])
+    if not filepath:
+        return
+    import csv
+    with open(filepath, 'w', newline='', encoding='utf-8') as f:
+        writer = csv.writer(f)
+        writer.writerow(['Start [s]', 'Koniec [s]', 'Prawdopodobieństwo', 'Przyczyna'])
+        t0 = app.ml_last_windows[0][0][3] if app.ml_last_windows[0] else 0
+        for r in app.ml_last_report:
+            writer.writerow([
+                f"{r['start_time'] - t0:.3f}",
+                f"{r['end_time'] - t0:.3f}",
+                f"{r['probability']:.3f}",
+                r['cause']
+            ])
+    app.log(f"[ML] Raport wyeksportowany do {filepath}")

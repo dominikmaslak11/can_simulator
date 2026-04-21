@@ -1,7 +1,7 @@
 import os
 import logging
 import numpy as np
-from collections import deque
+from collections import Counter
 
 logger = logging.getLogger("ML.SessionClassifier")
 
@@ -19,7 +19,6 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.pipeline import make_pipeline
 from sklearn.ensemble import IsolationForest
 
-# Parametry okna czasowego
 WINDOW_SECONDS = 5.0
 STEP_SECONDS = 1.0
 
@@ -47,7 +46,8 @@ class SessionClassifier:
         self.input_dim = 10
         self.window_sec = WINDOW_SECONDS
         self.step_sec = STEP_SECONDS
-        self.isolation_forest = None   # model bez nadzoru
+        self.isolation_forest = None
+        self.normal_statistics = {}   # ID -> {'avg_interval': ..., 'std_interval': ...}
 
     def _extract_features_from_window(self, frames):
         if not frames:
@@ -93,6 +93,26 @@ class SessionClassifier:
             current_start += self.step_sec
         return windows
 
+    def _compute_normal_statistics(self, normal_frames):
+        """Oblicza statystyki normalnego zachowania dla każdego ID."""
+        id_frames = {}
+        for f in normal_frames:
+            cid = f[0]
+            id_frames.setdefault(cid, []).append(f)
+
+        for cid, frames in id_frames.items():
+            if len(frames) < 2:
+                continue
+            timestamps = [f[3] for f in frames if f[3] is not None]
+            if len(timestamps) < 2:
+                continue
+            diffs = np.diff(sorted(timestamps))
+            self.normal_statistics[cid] = {
+                'avg_interval': np.mean(diffs),
+                'std_interval': np.std(diffs),
+                'count': len(frames)
+            }
+
     def prepare_training_data(self, normal_log_frames):
         windows = self._sliding_windows(normal_log_frames)
         X, y = [], []
@@ -103,6 +123,7 @@ class SessionClassifier:
         return np.array(X), np.array(y)
 
     def train(self, normal_frames, anomaly_frames=None):
+        self._compute_normal_statistics(normal_frames)
         X_norm, y_norm = self.prepare_training_data(normal_frames)
         if anomaly_frames:
             X_anom, y_anom = self.prepare_training_data(anomaly_frames)
@@ -121,7 +142,6 @@ class SessionClassifier:
         else:
             self._train_fallback(X, y)
 
-        # Trenuj również Isolation Forest na normalnych danych
         if len(X_norm) > 0:
             self.isolation_forest = IsolationForest(contamination=0.05, random_state=42)
             self.isolation_forest.fit(X_norm)
@@ -153,7 +173,7 @@ class SessionClassifier:
     def predict_proba(self, frames):
         windows = self._sliding_windows(frames)
         if not windows:
-            return [], []
+            return [], [], []
         X = np.array([self._extract_features_from_window(w) for w in windows])
         if self.use_lstm and self.lstm_model is not None:
             X_tensor = torch.tensor(X, dtype=torch.float32).unsqueeze(1)
@@ -169,28 +189,22 @@ class SessionClassifier:
             if w:
                 t = np.mean([f[3] for f in w])
                 times.append(t)
-        return times, probs
+        return times, probs, windows
 
     def detect_anomalies_unsupervised(self, frames):
-        """Wykrywa anomalie za pomocą Isolation Forest (bez etykiet)."""
         windows = self._sliding_windows(frames)
         if not windows:
-            return [], []
+            return [], [], []
         X = np.array([self._extract_features_from_window(w) for w in windows])
 
         if self.isolation_forest is None:
-            # Jeśli nie ma wytrenowanego modelu, trenuj na bieżących danych
             self.isolation_forest = IsolationForest(contamination=0.05, random_state=42)
             self.isolation_forest.fit(X)
             logger.info("Isolation Forest wytrenowany na bieżącym logu.")
 
-        # -1 dla anomalii, 1 dla normalnych
         preds = self.isolation_forest.predict(X)
-        # Konwertujemy na prawdopodobieństwo (0 = normalne, 1 = anomalia)
         scores = self.isolation_forest.decision_function(X)
-        # Normalizacja do [0,1]
         probs = 1.0 - (scores - scores.min()) / (scores.max() - scores.min() + 1e-8)
-        # Dla punktów sklasyfikowanych jako anomalie ustawiamy wyższe prawdopodobieństwo
         probs[preds == -1] = np.maximum(probs[preds == -1], 0.8)
 
         times = []
@@ -198,7 +212,89 @@ class SessionClassifier:
             if w:
                 t = np.mean([f[3] for f in w])
                 times.append(t)
-        return times, probs
+        return times, probs, windows
+
+    def generate_report(self, frames, times, probs, windows, threshold=0.5):
+        """
+        Generuje raport z listą anomalnych okien i podstawową diagnozą.
+        Zwraca listę słowników.
+        """
+        report = []
+        if not self.normal_statistics:
+            # Jeśli brak statystyk, pomijamy diagnozę
+            for i, (t, p, w) in enumerate(zip(times, probs, windows)):
+                if p >= threshold:
+                    report.append({
+                        'index': i,
+                        'start_time': min(f[3] for f in w if f[3] is not None),
+                        'end_time': max(f[3] for f in w if f[3] is not None),
+                        'probability': float(p),
+                        'cause': 'Nieznana (brak danych referencyjnych)',
+                        'details': {}
+                    })
+            return report
+
+        for i, (t, p, w) in enumerate(zip(times, probs, windows)):
+            if p < threshold:
+                continue
+            if not w:
+                continue
+
+            start_time = min(f[3] for f in w if f[3] is not None)
+            end_time = max(f[3] for f in w if f[3] is not None)
+
+            # Diagnoza: porównujemy z normalnymi statystykami
+            causes = []
+            details = {}
+
+            # 1. Sprawdź brakujące ID
+            ids_in_window = set(f[0] for f in w)
+            missing_ids = set(self.normal_statistics.keys()) - ids_in_window
+            if missing_ids:
+                causes.append(f"Brakujące ID: {', '.join(hex(c) for c in list(missing_ids)[:3])}")
+
+            # 2. Sprawdź odchylenia częstotliwości dla obecnych ID
+            id_timestamps = {}
+            for f in w:
+                cid = f[0]
+                id_timestamps.setdefault(cid, []).append(f[3])
+            freq_issues = []
+            for cid, stamps in id_timestamps.items():
+                if cid not in self.normal_statistics:
+                    continue
+                if len(stamps) < 2:
+                    continue
+                diffs = np.diff(sorted(stamps))
+                avg = np.mean(diffs)
+                norm = self.normal_statistics[cid]
+                if abs(avg - norm['avg_interval']) > 2 * norm['std_interval']:
+                    freq_issues.append(f"{hex(cid)}: {avg:.3f}s (norma: {norm['avg_interval']:.3f}s)")
+            if freq_issues:
+                causes.append(f"Zmiana częstotliwości: {'; '.join(freq_issues[:2])}")
+                details['frequency'] = freq_issues
+
+            # 3. Sprawdź liczbę ramek
+            normal_total = sum(s['count'] for s in self.normal_statistics.values())
+            window_total = len(w)
+            if normal_total > 0:
+                ratio = window_total / normal_total
+                if ratio < 0.5:
+                    causes.append(f"Mało ramek: {window_total} (norma ~{normal_total})")
+                elif ratio > 2.0:
+                    causes.append(f"Dużo ramek: {window_total} (norma ~{normal_total})")
+
+            cause_str = '; '.join(causes) if causes else "Odchylenie statystyczne (Isolation Forest)"
+
+            report.append({
+                'index': i,
+                'start_time': start_time,
+                'end_time': end_time,
+                'probability': float(p),
+                'cause': cause_str,
+                'details': details
+            })
+
+        return report
 
     def _save_model(self):
         if self.lstm_model:
