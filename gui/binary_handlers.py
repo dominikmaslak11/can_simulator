@@ -3,6 +3,7 @@ from tkinter import ttk, messagebox, simpledialog
 import threading
 from datetime import datetime
 from threads import BinarySearchThread
+from sequence_analyzer import SequenceAnalyzer
 
 
 class BinaryHandlers:
@@ -114,7 +115,9 @@ class BinaryHandlers:
     def _on_deactivation(self, candidates):
         self.log(f"[Polowanie] Wykryto dezaktywację! Znaleziono {len(candidates)} kandydatów.")
 
-        # Zapis do pliku
+        if hasattr(self, 'seq_analyzer'):
+            self.seq_analyzer.add_candidates(candidates)
+
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"candidates_{timestamp}.txt"
         with open(filename, 'w') as f:
@@ -134,7 +137,17 @@ class BinaryHandlers:
         btn_frame = ttk.Frame(win)
         btn_frame.pack(pady=10)
         ttk.Button(btn_frame, text="Przekaż do wyszukiwania binarnego",
-                   command=lambda: self._load_candidates_to_binary(candidates)).pack()
+                   command=lambda: self._load_candidates_to_binary(candidates)).pack(side=tk.LEFT, padx=5)
+        if hasattr(self, 'seq_analyzer'):
+            ttk.Button(btn_frame, text="Analizuj sekwencje",
+                       command=lambda: self._show_sequence_analysis()).pack(side=tk.LEFT, padx=5)
+            ttk.Button(btn_frame, text="Znajdź wzorzec (LCS)",
+                       command=lambda: self._show_lcs_pattern()).pack(side=tk.LEFT, padx=5)
+        # NOWY PRZYCISK: Użyj pierwszej ramki w symulacji
+        if candidates:
+            first = candidates[0]
+            ttk.Button(btn_frame, text="Użyj w symulacji",
+                       command=lambda: self._use_in_simulation(first)).pack(side=tk.LEFT, padx=5)
 
         self.binary_progress.config(text=f"Dezaktywacja! {len(candidates)} kandydatów.")
 
@@ -150,6 +163,90 @@ class BinaryHandlers:
         self.log(f"[Binary] Wczytano {len(self.binary_frames)} ramek z kandydatów.")
         self.notebook.select(self.tab_binary)
         messagebox.showinfo("Gotowe", f"Wczytano {len(self.binary_frames)} ramek.\nMożesz rozpocząć wyszukiwanie binarne.")
+
+    def _show_sequence_analysis(self):
+        if not hasattr(self, 'seq_analyzer'):
+            messagebox.showinfo("Brak analizatora", "Analizator sekwencji nie jest dostępny.")
+            return
+        top_seqs = self.seq_analyzer.get_top_sequences(5)
+        if not top_seqs:
+            messagebox.showinfo("Brak sekwencji", "Nie znaleziono jeszcze żadnych sekwencji.")
+            return
+
+        win = tk.Toplevel(self.root)
+        win.title("Najczęstsze sekwencje")
+        text = tk.scrolledtext.ScrolledText(win, width=100, height=15)
+        text.pack(fill=tk.BOTH, expand=True)
+        text.insert(tk.END, "Najczęściej występujące sekwencje:\n\n")
+        for i, (seq, count) in enumerate(top_seqs):
+            text.insert(tk.END, f"Sekwencja {i+1} (wystąpień: {count}):\n")
+            for j, (cid, data, is_ext) in enumerate(seq):
+                text.insert(tk.END, f"  {j+1}. ID=0x{cid:08X} Data={data.hex().upper()} {'EXT' if is_ext else 'STD'}\n")
+            text.insert(tk.END, "\n")
+
+        btn_frame = ttk.Frame(win)
+        btn_frame.pack(pady=10)
+        ttk.Button(btn_frame, text="Zamknij", command=win.destroy).pack()
+
+    def _show_lcs_pattern(self):
+        if not hasattr(self, 'seq_analyzer'):
+            messagebox.showinfo("Brak analizatora", "Analizator sekwencji nie jest dostępny.")
+            return
+        pattern = self.seq_analyzer.find_pattern_across_sessions(min_support=2)
+        if not pattern:
+            messagebox.showinfo("Brak wzorca", "Nie znaleziono wspólnego wzorca dla co najmniej 2 sesji.")
+            return
+
+        win = tk.Toplevel(self.root)
+        win.title("Wzorzec LCS")
+        text = tk.scrolledtext.ScrolledText(win, width=100, height=10)
+        text.pack(fill=tk.BOTH, expand=True)
+        text.insert(tk.END, "Wspólny wzorzec (LCS) dla wszystkich sesji:\n\n")
+        for i, (cid, data, is_ext) in enumerate(pattern):
+            text.insert(tk.END, f"{i+1:4d}. ID=0x{cid:08X} Data={data.hex().upper()} {'EXT' if is_ext else 'STD'}\n")
+        text.config(state='disabled')
+
+        btn_frame = ttk.Frame(win)
+        btn_frame.pack(pady=10)
+        ttk.Button(btn_frame, text="Przekaż do wyszukiwania binarnego",
+                   command=lambda: self._load_pattern_to_binary(pattern)).pack(side=tk.LEFT, padx=5)
+        ttk.Button(btn_frame, text="Użyj wzorca w symulacji",
+                   command=lambda: self._use_pattern_in_simulation(pattern)).pack(side=tk.LEFT, padx=5)
+        ttk.Button(btn_frame, text="Zamknij", command=win.destroy).pack()
+
+    def _load_pattern_to_binary(self, pattern):
+        if not pattern:
+            return
+        self.binary_frames = pattern
+        self.binary_info.config(text=f"Wczytano wzorzec ({len(pattern)} ramek)")
+        self.binary_start_btn.config(state='normal')
+        self.binary_mode.set('find_start')
+        self._redraw_binary_progress()
+        self.log(f"[Binary] Wczytano wzorzec LCS ({len(pattern)} ramek).")
+        self.notebook.select(self.tab_binary)
+        messagebox.showinfo("Gotowe", "Wzorzec został przekazany do wyszukiwania.")
+
+    def _use_in_simulation(self, frame_tuple):
+        """Przekazuje pojedynczą ramkę do zakładki symulacji."""
+        cid, data, is_ext, _ = frame_tuple
+        self._switch_to_simulation_tab(cid, data, is_ext)
+
+    def _use_pattern_in_simulation(self, pattern):
+        """Przekazuje pierwszą ramkę wzorca do symulacji."""
+        if pattern:
+            cid, data, is_ext = pattern[0]
+            self._switch_to_simulation_tab(cid, data, is_ext)
+
+    def _switch_to_simulation_tab(self, can_id, data, is_extended):
+        """Wypełnia odpowiednie pola w zakładce symulacji i przełącza na nią."""
+        # Domyślnie używamy zakładki "Symulacja modułu"
+        self.missing_8f.set(1.0)  # przykładowy interwał
+        # Wypełniamy również ręczne wysyłanie, bo tam są pola ID i danych
+        self.manual_id.set(f"{can_id:08X}")
+        self.manual_data.set(data.hex().upper())
+        self.manual_extended.set(is_extended)
+        self.notebook.select(self.tab_manual)  # lub self.tab_missing – decyzja należy do Ciebie
+        self.log(f"Przekazano ID=0x{can_id:08X} do zakładki symulacji.")
 
     def binary_answer_yes(self):
         if self.binary_thread and self.binary_thread.is_alive():
@@ -214,6 +311,23 @@ class BinaryHandlers:
             btn.config(state='disabled')
         self.binary_progress.config(text="Wyszukiwanie zakończone.")
         self._redraw_binary_progress()
+        # Jeśli znaleziono ramkę, pokaż przycisk "Użyj w symulacji"
+        if self.binary_thread and hasattr(self.binary_thread, 'left') and self.binary_thread.left == self.binary_thread.right:
+            idx = self.binary_thread.left
+            if idx < len(self.binary_frames):
+                cid, data, is_ext = self.binary_frames[idx]
+                self._show_result_with_simulation_button(cid, data, is_ext)
+
+    def _show_result_with_simulation_button(self, cid, data, is_ext):
+        win = tk.Toplevel(self.root)
+        win.title("Wynik wyszukiwania")
+        tk.Label(win, text=f"Znaleziono ramkę:\nID=0x{cid:08X}\nData={data.hex().upper()}\n{'EXT' if is_ext else 'STD'}",
+                 font=('Arial', 12)).pack(padx=20, pady=20)
+        btn_frame = ttk.Frame(win)
+        btn_frame.pack(pady=10)
+        ttk.Button(btn_frame, text="Użyj w symulacji",
+                   command=lambda: [self._switch_to_simulation_tab(cid, data, is_ext), win.destroy()]).pack(side=tk.LEFT, padx=5)
+        ttk.Button(btn_frame, text="Zamknij", command=win.destroy).pack(side=tk.LEFT, padx=5)
 
     def stop_binary_search(self):
         if self.binary_thread:
