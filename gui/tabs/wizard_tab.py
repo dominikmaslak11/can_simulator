@@ -1,8 +1,5 @@
 import tkinter as tk
-from tkinter import ttk, filedialog, messagebox, simpledialog
-import threading
-import time
-from parsers import load_frames_from_file
+from tkinter import ttk, filedialog
 
 
 def setup_wizard_tab(app, tab):
@@ -13,7 +10,8 @@ def setup_wizard_tab(app, tab):
     file_var = tk.StringVar()
     ttk.Entry(frame, textvariable=file_var, width=50).grid(row=0, column=1, padx=5)
     ttk.Button(frame, text="Przeglądaj", command=lambda: browse_wizard_file(file_var)).grid(row=0, column=2)
-    ttk.Button(frame, text="Wczytaj plik", command=lambda: load_wizard_file(app, file_var, info_label, start_btn)).grid(row=0, column=3, padx=5)
+    ttk.Button(frame, text="Wczytaj plik",
+               command=lambda: app.wizard_ctrl.load_file(file_var, info_label, start_btn)).grid(row=0, column=3, padx=5)
 
     info_label = ttk.Label(frame, text="Nie wczytano pliku")
     info_label.grid(row=1, column=0, columnspan=4, pady=5)
@@ -54,8 +52,8 @@ def setup_wizard_tab(app, tab):
 
     seq_btn_frame = ttk.Frame(search_frame)
     seq_btn_frame.grid(row=2, column=0, columnspan=4, pady=5)
-    ttk.Button(seq_btn_frame, text="Dodaj ramkę", command=lambda: add_sequence_frame(app)).pack(side=tk.LEFT, padx=5)
-    ttk.Button(seq_btn_frame, text="Usuń zaznaczoną", command=lambda: remove_sequence_frame(app)).pack(side=tk.LEFT, padx=5)
+    ttk.Button(seq_btn_frame, text="Dodaj ramkę", command=app.wizard_ctrl.add_sequence_frame).pack(side=tk.LEFT, padx=5)
+    ttk.Button(seq_btn_frame, text="Usuń zaznaczoną", command=app.wizard_ctrl.remove_sequence_frame).pack(side=tk.LEFT, padx=5)
 
     def toggle_mode(*args):
         if mode_var.get() == "single":
@@ -102,9 +100,15 @@ def setup_wizard_tab(app, tab):
     no_btn.pack(side=tk.LEFT, padx=5)
     stop_btn = ttk.Button(btn_frame, text="Stop", state='disabled')
     stop_btn.pack(side=tk.LEFT, padx=5)
-    undo_btn = ttk.Button(btn_frame, text="Cofnij", state='disabled', command=lambda: undo_wizard_step(app))
+    undo_btn = ttk.Button(btn_frame, text="Cofnij", state='disabled', command=app.wizard_ctrl.undo_step)
     undo_btn.pack(side=tk.LEFT, padx=5)
-    ttk.Button(btn_frame, text="Reset", command=lambda: reset_wizard(app)).pack(side=tk.LEFT, padx=5)
+    export_btn = ttk.Button(btn_frame, text="Eksportuj sesję", state='disabled',
+                            command=app.wizard_ctrl.export_session)
+    export_btn.pack(side=tk.LEFT, padx=5)
+    import_btn = ttk.Button(btn_frame, text="Importuj sesję",
+                            command=app.wizard_ctrl.import_session)
+    import_btn.pack(side=tk.LEFT, padx=5)
+    ttk.Button(btn_frame, text="Reset", command=app.wizard_ctrl.reset).pack(side=tk.LEFT, padx=5)
 
     app.wizard_file_var = file_var
     app.wizard_info = info_label
@@ -123,329 +127,26 @@ def setup_wizard_tab(app, tab):
     app.wizard_no_btn = no_btn
     app.wizard_stop_btn = stop_btn
     app.wizard_undo_btn = undo_btn
+    app.wizard_export_btn = export_btn
 
-    start_btn.config(command=lambda: start_wizard_search(app))
-    yes_btn.config(command=lambda: wizard_answer_yes(app))
-    no_btn.config(command=lambda: wizard_answer_no(app))
-    stop_btn.config(command=lambda: stop_wizard_search(app))
-
-    app.wizard_frames = []
-    app.wizard_sequence = []
-    app.wizard_thread = None
-    app.wizard_answer_event = threading.Event()
-    app.wizard_answer = None
-    app.wizard_history = []
-    app.wizard_left = 0
-    app.wizard_right = 0
+    start_btn.config(command=app.wizard_ctrl.start_search)
+    yes_btn.config(command=app.wizard_ctrl.answer_yes)
+    no_btn.config(command=app.wizard_ctrl.answer_no)
+    stop_btn.config(command=app.wizard_ctrl.stop_search)
 
 
 def browse_wizard_file(file_var):
     path = filedialog.askopenfilename(filetypes=[("Logi", "*.txt *.log"), ("Wszystkie", "*.*")])
-    if path: file_var.set(path)
+    if path:
+        file_var.set(path)
 
 
-def load_wizard_file(app, file_var, info_label, start_btn):
-    path = file_var.get()
-    if not path:
-        messagebox.showerror("Błąd", "Wybierz plik")
-        return
-    try:
-        app.wizard_frames = load_frames_from_file(path)
-        info_label.config(text=f"Wczytano {len(app.wizard_frames)} ramek")
-        app.log(f"[Kreator] Wczytano {len(app.wizard_frames)} ramek z {path}")
-        start_btn.config(state='normal')
-        app.wizard_left = 0
-        app.wizard_right = len(app.wizard_frames) - 1
-        app._redraw_wizard_progress()
-    except Exception as e:
-        messagebox.showerror("Błąd", f"Nie udało się wczytać pliku: {e}")
-
-
-def add_sequence_frame(app):
-    dialog = tk.Toplevel(app.root)
-    dialog.title("Dodaj ramkę do sekwencji")
-    dialog.geometry("300x200")
-    dialog.transient(app.root)
-    dialog.grab_set()
-
-    ttk.Label(dialog, text="ID (hex):").grid(row=0, column=0, sticky=tk.W, padx=5, pady=5)
-    id_var = tk.StringVar()
-    ttk.Entry(dialog, textvariable=id_var, width=15).grid(row=0, column=1, padx=5)
-
-    ttk.Label(dialog, text="Dane (hex, opcjonalnie):").grid(row=1, column=0, sticky=tk.W, padx=5, pady=5)
-    data_var = tk.StringVar()
-    ttk.Entry(dialog, textvariable=data_var, width=30).grid(row=1, column=1, padx=5)
-
-    ext_var = tk.BooleanVar(value=True)
-    ttk.Checkbutton(dialog, text="Ramka rozszerzona", variable=ext_var).grid(row=2, column=0, columnspan=2, pady=5)
-
-    def save():
-        try:
-            cid = int(id_var.get().strip(), 16)
-            data_str = data_var.get().strip()
-            data = bytes.fromhex(data_str) if data_str else b''
-            is_ext = ext_var.get()
-            app.wizard_sequence.append((cid, data, is_ext))
-            app.wizard_seq_listbox.insert(tk.END, f"ID=0x{cid:08X} Data={data.hex().upper() if data else '-'} EXT={is_ext}")
-            dialog.destroy()
-        except ValueError:
-            messagebox.showerror("Błąd", "Nieprawidłowy format ID lub danych")
-
-    ttk.Button(dialog, text="Dodaj", command=save).grid(row=3, column=0, columnspan=2, pady=10)
-
-
-def remove_sequence_frame(app):
-    selection = app.wizard_seq_listbox.curselection()
-    if selection:
-        index = selection[0]
-        app.wizard_seq_listbox.delete(index)
-        del app.wizard_sequence[index]
-
-
-def reset_wizard(app):
-    if app.wizard_thread and app.wizard_thread.is_alive():
-        app.wizard_thread.stop()
-    app.wizard_start_btn.config(state='normal')
-    app.wizard_yes_btn.config(state='disabled')
-    app.wizard_no_btn.config(state='disabled')
-    app.wizard_stop_btn.config(state='disabled')
-    app.wizard_undo_btn.config(state='disabled')
-    app.wizard_progress.config(text="Postęp: --")
-    app.wizard_left = 0
-    app.wizard_right = len(app.wizard_frames) - 1 if app.wizard_frames else 0
-    app.wizard_history.clear()
-    app._redraw_wizard_progress()
-    app.log("[Kreator] Reset.")
-
-
-def start_wizard_search(app):
-    if not app.wizard_frames:
-        messagebox.showerror("Błąd", "Najpierw wczytaj plik")
-        return
-    if not app.can.connected:
-        messagebox.showerror("Błąd", "Połącz się z CAN")
-        return
-
-    mode = app.wizard_mode_var.get()
-    if mode == "single":
-        try:
-            target_id = int(app.wizard_id_var.get().strip(), 16)
-            data_str = app.wizard_data_var.get().strip()
-            target_data = bytes.fromhex(data_str) if data_str else None
-            target_is_ext = app.wizard_extended_var.get()
-            target = (target_id, target_data, target_is_ext)
-        except ValueError:
-            messagebox.showerror("Błąd", "Nieprawidłowy format ID lub danych")
-            return
-    else:
-        if not app.wizard_sequence:
-            messagebox.showerror("Błąd", "Dodaj co najmniej jedną ramkę do sekwencji")
-            return
-        target = list(app.wizard_sequence)
-
-    app.wizard_target = target
-    app.wizard_left = 0
-    app.wizard_right = len(app.wizard_frames) - 1
-    app.wizard_history.clear()
-
-    app.wizard_start_btn.config(state='disabled')
-    app.wizard_yes_btn.config(state='normal')
-    app.wizard_no_btn.config(state='normal')
-    app.wizard_stop_btn.config(state='normal')
-    app.wizard_undo_btn.config(state='normal')
-
-    app.wizard_thread = WizardSearchThread(app, app.log)
-    app.wizard_thread.setup(app.wizard_frames, app.wizard_interval.get(),
-                            target, app.wizard_parts_var.get(),
-                            app.wizard_use_timestamps.get())
-    app.wizard_thread.start()
-    app._update_wizard_progress()
-
-
-class WizardSearchThread(threading.Thread):
-    def __init__(self, app, log_cb):
-        super().__init__(daemon=True)
-        self.app = app
-        self.log_cb = log_cb
-        self.running = False
-        self.frames = []
-        self.interval = 0.5
-        self.use_timestamps = False
-        self.target = None
-        self.num_parts = 2
-        self.left = 0
-        self.right = 0
-
-    def log(self, msg):
-        self.log_cb(msg)
-
-    def setup(self, frames, interval, target, num_parts=2, use_timestamps=False):
-        self.frames = frames
-        self.interval = interval
-        self.target = target
-        self.num_parts = num_parts
-        self.use_timestamps = use_timestamps
-        self.left = 0
-        self.right = len(frames) - 1
-        self.running = True
-
-    def run(self):
-        while self.running and self.left <= self.right:
-            total = self.right - self.left + 1
-            part_size = max(1, total // self.num_parts)
-            parts = []
-            for i in range(self.num_parts):
-                s = self.left + i * part_size
-                e = self.right if i == self.num_parts - 1 else s + part_size - 1
-                parts.append((s, e))
-
-            found_part = None
-            for idx, (s, e) in enumerate(parts):
-                if not self.running:
-                    return
-                self.log(f"[Kreator] Odtwarzanie części {idx+1}/{len(parts)}: [{s} .. {e}]")
-                self._play_range(s, e)
-                if not self.running:
-                    return
-
-                self.app.wizard_answer_event.clear()
-                self.app.wizard_answer_event.wait()
-                answer = self.app.wizard_answer
-                if answer is None:
-                    self.log("[Kreator] Anulowano")
-                    return
-
-                if answer:
-                    found_part = (s, e)
-                    break
-
-            if found_part is None:
-                self.log("[Kreator] Nie znaleziono szukanej ramki/sekwencji w żadnej części.")
-                break
-
-            self.left, self.right = found_part
-            self.app.wizard_history.append((self.left, self.right))
-            self.app._update_wizard_progress()
-            self.log(f"[Kreator] Zawężono zakres do [{self.left} .. {self.right}]")
-
-            if self.left == self.right:
-                if self._matches(self.frames[self.left]):
-                    self.log(f"[Kreator] Znaleziono szukaną ramkę na indeksie {self.left}")
-                else:
-                    self.log(f"[Kreator] Nie znaleziono dokładnego dopasowania. Zatrzymano na indeksie {self.left}")
-                break
-
-            self.app.wizard_answer_event.clear()
-            change = self._ask("Czy chcesz zmienić liczbę części dla następnego kroku?", input_type='yesno')
-            if change:
-                new_parts = self._ask("Podaj nową liczbę części:", input_type='integer', default=self.num_parts)
-                if new_parts and new_parts > 0:
-                    self.num_parts = new_parts
-
-        self.running = False
-        self.app.root.after(0, self._done)
-        self.log("[Kreator] Wyszukiwanie zakończone.")
-
-    def _play_range(self, start, end):
-        last_ts = None
-        for i in range(start, end + 1):
-            if not self.running:
-                break
-            cid, data, is_ext, ts = self.frames[i]
-            if self.use_timestamps and ts is not None:
-                if last_ts is not None and ts > last_ts:
-                    time.sleep(ts - last_ts)
-                last_ts = ts
-            else:
-                time.sleep(self.interval)
-            self.app.can.send_frame(cid, data, is_ext)
-
-    def _matches(self, frame):
-        if isinstance(self.target, tuple):
-            tid, tdata, tis_ext = self.target
-            cid, data, is_ext, _ = frame
-            if cid != tid or is_ext != tis_ext:
-                return False
-            if tdata is not None and data != tdata:
-                return False
-            return True
-        else:
-            seq = self.target
-            idx = self.frames.index(frame)
-            if idx + len(seq) > len(self.frames):
-                return False
-            for i, (sid, sdata, sis_ext) in enumerate(seq):
-                cid, data, is_ext, _ = self.frames[idx + i]
-                if cid != sid or is_ext != sis_ext:
-                    return False
-                if sdata and data != sdata:
-                    return False
-            return True
-
-    def _ask(self, prompt, input_type='yesno', default=None):
-        if input_type == 'yesno':
-            return messagebox.askyesno("Pytanie", prompt)
-        elif input_type == 'integer':
-            return simpledialog.askinteger("Liczba", prompt, initialvalue=default)
-        return None
-
-    def _done(self):
-        self.app.wizard_start_btn.config(state='normal')
-        self.app.wizard_yes_btn.config(state='disabled')
-        self.app.wizard_no_btn.config(state='disabled')
-        self.app.wizard_stop_btn.config(state='disabled')
-        self.app.wizard_undo_btn.config(state='disabled')
-
-    def stop(self):
-        self.running = False
-        self.app.wizard_answer_event.set()
-
-
-def wizard_answer_yes(app):
-    if app.wizard_thread and app.wizard_thread.is_alive():
-        app.wizard_answer = True
-        app.wizard_answer_event.set()
-        app.log("[Kreator] Odpowiedź: TAK")
-        app._update_wizard_progress()
-
-
-def wizard_answer_no(app):
-    if app.wizard_thread and app.wizard_thread.is_alive():
-        app.wizard_answer = False
-        app.wizard_answer_event.set()
-        app.log("[Kreator] Odpowiedź: NIE")
-        app._update_wizard_progress()
-
-
-def stop_wizard_search(app):
-    if app.wizard_thread:
-        app.wizard_thread.stop()
-    app.wizard_start_btn.config(state='normal')
-    app.wizard_yes_btn.config(state='disabled')
-    app.wizard_no_btn.config(state='disabled')
-    app.wizard_stop_btn.config(state='disabled')
-    app.wizard_undo_btn.config(state='disabled')
-    app.log("[Kreator] Zatrzymano.")
-
-
-def undo_wizard_step(app):
-    if app.wizard_history:
-        app.wizard_history.pop()
-        if app.wizard_history:
-            app.wizard_left, app.wizard_right = app.wizard_history[-1]
-        else:
-            app.wizard_left, app.wizard_right = 0, len(app.wizard_frames) - 1
-        app._update_wizard_progress()
-        app.log(f"[Kreator] Cofnięto do zakresu [{app.wizard_left} .. {app.wizard_right}]")
-    else:
-        messagebox.showinfo("Cofnij", "Brak wcześniejszego stanu.")
-
-
+# Funkcje pomocnicze dla zgodności z app.py
 def _update_wizard_progress(app):
     if app.wizard_frames:
         total = len(app.wizard_frames)
         app.wizard_progress.config(text=f"Zakres: [{app.wizard_left} .. {app.wizard_right}] (razem: {total})")
-        app._redraw_wizard_progress()
+        _redraw_wizard_progress(app)
 
 
 def _redraw_wizard_progress(app):

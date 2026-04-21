@@ -1,5 +1,5 @@
 import tkinter as tk
-from tkinter import ttk, scrolledtext, messagebox, simpledialog
+from tkinter import ttk, scrolledtext, messagebox
 from datetime import datetime
 import threading
 import time
@@ -7,8 +7,12 @@ import logging
 
 from can_interface import CanInterface
 from threads import SimulationThread, BinarySearchThread
-from gui.tabs import replay_tab, missing_tab, error_tab, step_tab, manual_tab, binary_tab, wizard_tab
+from gui.tabs import replay_tab, missing_tab, error_tab, step_tab, manual_tab, binary_tab, wizard_tab, sniffer_tab
 from gui.utils import write_log_to_file
+from controllers import (
+    CanController, ReplayController, MissingController, ErrorController,
+    StepController, ManualController, BinaryController, WizardController, SnifferController
+)
 
 logger = logging.getLogger("App")
 
@@ -30,10 +34,9 @@ class CanSimulatorApp:
         self.manual_cyclic_active = False
         self.manual_cyclic_thread = None
 
-        # Zmienna dla checkboxa "Użyj oryginalnych odstępów czasowych"
         self.replay_use_timestamps = tk.BooleanVar(value=False)
 
-        # Atrybuty dla kreatora wyszukiwania
+        # Kreator
         self.wizard_frames = []
         self.wizard_id_var = tk.StringVar()
         self.wizard_data_var = tk.StringVar()
@@ -46,6 +49,24 @@ class CanSimulatorApp:
         self.wizard_history = []
         self.wizard_answer = None
         self.wizard_answer_event = threading.Event()
+
+        # Sniffer
+        self.sniffer_running = False
+        self.sniffer_filter_var = tk.BooleanVar(value=False)
+        self.sniffer_queue = []
+        self.sniffer_lock = threading.Lock()
+        self.sniffer_last_data = {}
+
+        # Kontrolery
+        self.can_ctrl = CanController(self)
+        self.replay_ctrl = ReplayController(self)
+        self.missing_ctrl = MissingController(self)
+        self.error_ctrl = ErrorController(self)
+        self.step_ctrl = StepController(self)
+        self.manual_ctrl = ManualController(self)
+        self.binary_ctrl = BinaryController(self)
+        self.wizard_ctrl = WizardController(self)
+        self.sniffer_ctrl = SnifferController(self)
 
         self._create_widgets()
         logger.info("Interfejs GUI utworzony")
@@ -74,7 +95,7 @@ class CanSimulatorApp:
         self.entry_iface.insert(0, "can0")
         self.entry_iface.grid(row=0, column=1, padx=5)
 
-        self.btn_connect = ttk.Button(frame_conn, text="Połącz", command=self.toggle_connection)
+        self.btn_connect = ttk.Button(frame_conn, text="Połącz", command=self.can_ctrl.toggle_connection)
         self.btn_connect.grid(row=0, column=2, padx=5)
 
         self.lbl_status = ttk.Label(frame_conn, text="Niepołączony", foreground="red")
@@ -112,6 +133,10 @@ class CanSimulatorApp:
         self.notebook.add(self.tab_wizard, text="Kreator wyszukiwania")
         wizard_tab.setup_wizard_tab(self, self.tab_wizard)
 
+        self.tab_sniffer = ttk.Frame(self.notebook)
+        self.notebook.add(self.tab_sniffer, text="Sniffer CAN")
+        sniffer_tab.setup_sniffer_tab(self, self.tab_sniffer)
+
         # Log
         frame_log = ttk.LabelFrame(self.root, text="Log", padding=5)
         frame_log.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
@@ -120,26 +145,6 @@ class CanSimulatorApp:
 
         self.status_var = tk.StringVar(value="Gotowy.")
         ttk.Label(self.root, textvariable=self.status_var, relief=tk.SUNKEN).pack(fill=tk.X, padx=10, pady=2)
-
-    def toggle_connection(self):
-        if self.can.connected:
-            self.can.disconnect()
-            self.lbl_status.config(text="Niepołączony", foreground="red")
-            self.btn_connect.config(text="Połącz")
-            self._set_buttons_state('disabled')
-        else:
-            iface = self.entry_iface.get().strip()
-            if not iface:
-                messagebox.showerror("Błąd", "Podaj nazwę interfejsu")
-                return
-            success, msg = self.can.connect()
-            if success:
-                self.lbl_status.config(text=f"Połączony: {iface}", foreground="green")
-                self.btn_connect.config(text="Rozłącz")
-                self._set_buttons_state('normal')
-                self.log(msg)
-            else:
-                messagebox.showerror("Błąd", msg)
 
     def _set_buttons_state(self, state):
         buttons = [
@@ -164,57 +169,6 @@ class CanSimulatorApp:
             self.step_preview.config(text=f"Następna: ID=0x{cid:08X}{ext_str} Data={data.hex().upper()}")
         else:
             self.step_preview.config(text="Koniec listy")
-
-    def step_next(self):
-        if not self.step_frames or self.step_idx >= len(self.step_frames):
-            messagebox.showinfo("Koniec", "Wszystkie ramki zostały wysłane")
-            return
-        if not self.can.connected:
-            messagebox.showerror("Błąd", "Połącz się z CAN")
-            return
-        cid, data, is_ext = self.step_frames[self.step_idx]
-        success, msg = self.can.send_frame(cid, data, is_ext)
-        self.log(msg)
-        self.step_idx += 1
-        self.step_progress.config(text=f"{self.step_idx} / {len(self.step_frames)}")
-        self._update_step_preview()
-
-    def start_replay(self):
-        if not self.loaded_frames:
-            messagebox.showerror("Błąd", "Najpierw wczytaj plik")
-            return
-        self._start_sim()
-        self.sim_thread.setup_replay(
-            self.loaded_frames,
-            self.replay_interval.get(),
-            self.replay_loop.get(),
-            self.replay_speed.get(),
-            self.replay_use_timestamps.get()          # <-- przekazanie timestampów
-        )
-        self.sim_thread.start()
-        self._simulation_started()
-
-    def start_missing(self):
-        self._start_sim()
-        self.sim_thread.setup_missing_module(
-            self.missing_8f.get(),
-            self.missing_diag.get(),
-            self.missing_spor.get()
-        )
-        self.sim_thread.mode = 'missing'
-        self.sim_thread.start()
-        self._simulation_started()
-
-    def start_error(self):
-        self._start_sim()
-        try:
-            code = int(self.error_code.get().strip(), 16)
-        except ValueError:
-            code = 0x19
-        self.sim_thread.setup_error_frames(self.error_interval.get(), code)
-        self.sim_thread.mode = 'error'
-        self.sim_thread.start()
-        self._simulation_started()
 
     def _start_sim(self):
         if self.sim_thread and self.sim_thread.is_alive():
@@ -241,95 +195,10 @@ class CanSimulatorApp:
         self.replay_pause_btn.config(state='disabled')
         self.replay_stop_btn.config(state='disabled')
 
-    # ---------- Ręczne wysyłanie ----------
-    def manual_send_once(self):
-        if not self.can.connected:
-            messagebox.showerror("Błąd", "Połącz się z CAN")
-            return
-        try:
-            can_id = int(self.manual_id.get().strip(), 16)
-            data = bytes.fromhex(self.manual_data.get().strip())
-        except ValueError:
-            messagebox.showerror("Błąd", "Nieprawidłowy format ID lub danych")
-            return
-        success, msg = self.can.send_frame(can_id, data, self.manual_extended.get())
-        self.log(msg)
-
-    def manual_start_cyclic(self):
-        if not self.can.connected:
-            messagebox.showerror("Błąd", "Połącz się z CAN")
-            return
-        try:
-            can_id = int(self.manual_id.get().strip(), 16)
-            data = bytes.fromhex(self.manual_data.get().strip())
-        except ValueError:
-            messagebox.showerror("Błąd", "Nieprawidłowy format")
-            return
-        interval = self.manual_interval.get()
-        if interval <= 0:
-            messagebox.showerror("Błąd", "Interwał musi być > 0")
-            return
-
-        self.manual_cyclic_active = True
-        self.manual_start_btn.config(state='disabled')
-        self.manual_send_once_btn.config(state='disabled')
-        self.manual_stop_btn.config(state='normal')
-
-        def worker():
-            while self.manual_cyclic_active:
-                success, msg = self.can.send_frame(can_id, data, self.manual_extended.get())
-                self.log(msg)
-                time.sleep(interval)
-
-        self.manual_cyclic_thread = threading.Thread(target=worker, daemon=True)
-        self.manual_cyclic_thread.start()
-
-    def manual_stop_cyclic(self):
-        self.manual_cyclic_active = False
-        self.manual_start_btn.config(state='normal')
-        self.manual_send_once_btn.config(state='normal')
-        self.manual_stop_btn.config(state='disabled')
-        self.log("Zatrzymano wysyłanie cykliczne")
-
-    # ---------- Wyszukiwanie binarne ----------
-    def start_binary_search(self):
-        if not self.binary_frames:
-            messagebox.showerror("Błąd", "Najpierw wczytaj plik")
-            return
-        if not self.can.connected:
-            messagebox.showerror("Błąd", "Połącz się z CAN")
-            return
-
-        self.binary_start_btn.config(state='disabled')
-        self.binary_yes_btn.config(state='normal')
-        self.binary_no_btn.config(state='normal')
-        self.binary_stop_btn.config(state='normal')
-        self.binary_undo_btn.config(state='normal')
-
+    # Wyszukiwanie binarne – pomocnicze
+    def _start_binary_thread(self, ask_callback):
         mode = self.binary_mode.get()
         num_parts = self.binary_parts.get() if mode == 'manual_parts' else 2
-
-        self.binary_answer = None
-        self.binary_answer_event = threading.Event()
-
-        def ask_callback(prompt="Czy zjawisko wystąpiło?", input_type='yesno', choices=None, default=None):
-            self.binary_answer_event.clear()
-            self.log(f"[Binary] {prompt}")
-            if input_type == 'yesno':
-                self.binary_answer_event.wait()
-                return self.binary_answer
-            elif input_type == 'choice':
-                choice = simpledialog.askinteger("Wybór", prompt, minvalue=1, maxvalue=len(choices))
-                self.binary_answer_event.set()
-                return choice - 1 if choice is not None else None
-            elif input_type == 'integer':
-                val = simpledialog.askinteger("Liczba części", prompt, initialvalue=default)
-                self.binary_answer_event.set()
-                return val
-            else:
-                self.binary_answer_event.wait()
-                return self.binary_answer
-
         self.binary_thread = BinarySearchThread(
             self.can, self.log, ask_callback, self._binary_done, self._update_binary_progress
         )
@@ -338,24 +207,8 @@ class CanSimulatorApp:
             self.binary_interval.get(),
             mode=mode,
             num_parts=num_parts,
-            use_timestamps=self.binary_use_timestamps.get()      # <-- przekazanie timestampów
+            use_timestamps=self.binary_use_timestamps.get()
         )
-        self.binary_thread.start()
-        self._update_binary_progress()
-
-    def binary_answer_yes(self):
-        if self.binary_thread and self.binary_thread.is_alive():
-            self.binary_answer = True
-            self.binary_answer_event.set()
-            self.log("[Binary] TAK")
-            self._update_binary_progress()
-
-    def binary_answer_no(self):
-        if self.binary_thread and self.binary_thread.is_alive():
-            self.binary_answer = False
-            self.binary_answer_event.set()
-            self.log("[Binary] NIE")
-            self._update_binary_progress()
 
     def _update_binary_progress(self):
         if self.binary_thread:
@@ -404,16 +257,12 @@ class CanSimulatorApp:
         self.binary_start_btn.config(state='normal')
         for btn in [self.binary_yes_btn, self.binary_no_btn, self.binary_stop_btn, self.binary_undo_btn]:
             btn.config(state='disabled')
+        if hasattr(self, 'binary_export_btn') and self.binary_export_btn:
+            self.binary_export_btn.config(state='disabled')
         self.binary_progress.config(text="Wyszukiwanie zakończone.")
         self._redraw_binary_progress()
 
-    def stop_binary_search(self):
-        if self.binary_thread:
-            self.binary_thread.stop()
-        self._binary_done()
-        self.log("[Binary] Zatrzymano.")
-
-    # ---------- Kreator wyszukiwania (metody pomocnicze) ----------
+    # Kreator
     def _update_wizard_progress(self):
         if self.wizard_frames:
             total = len(self.wizard_frames)

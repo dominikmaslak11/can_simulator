@@ -40,6 +40,6 @@ def setup_manual_tab(app, tab):
     app.manual_start_btn = start_cyclic_btn
     app.manual_stop_btn = stop_cyclic_btn
 
-    send_once_btn.config(command=app.manual_send_once)
-    start_cyclic_btn.config(command=app.manual_start_cyclic)
-    stop_cyclic_btn.config(command=app.manual_stop_cyclic)
+    send_once_btn.config(command=app.manual_ctrl.manual_send_once)
+    start_cyclic_btn.config(command=app.manual_ctrl.manual_start_cyclic)
+    stop_cyclic_btn.config(command=app.manual_ctrl.manual_stop_cyclic)

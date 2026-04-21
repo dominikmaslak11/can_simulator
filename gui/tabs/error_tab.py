@@ -24,4 +24,4 @@ def setup_error_tab(app, tab):
     app.error_interval = error_interval
     app.error_code = error_code
     app.error_start_btn = start_btn
-    start_btn.config(command=app.start_error)
+    start_btn.config(command=app.error_ctrl.start_error)

@@ -29,4 +29,4 @@ def setup_missing_tab(app, tab):
     app.missing_diag = missing_diag
     app.missing_spor = missing_spor
     app.missing_start_btn = start_btn
-    start_btn.config(command=app.start_missing)
+    start_btn.config(command=app.missing_ctrl.start_missing)

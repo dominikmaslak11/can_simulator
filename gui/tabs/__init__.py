@@ -5,3 +5,4 @@ from . import step_tab
 from . import manual_tab
 from . import binary_tab
 from . import wizard_tab
+from . import sniffer_tab

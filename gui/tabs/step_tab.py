@@ -36,13 +36,12 @@ def setup_step_tab(app, tab):
     app.step_progress = progress_label
     app.step_preview = preview_label
     app.step_next_btn = next_btn
-    next_btn.config(command=app.step_next)
-    app.root.bind('<Return>', lambda e: app.step_next())
+    next_btn.config(command=app.step_ctrl.step_next)
+    app.root.bind('<Return>', lambda e: app.step_ctrl.step_next())
 
 def browse_step_file(file_var):
     path = filedialog.askopenfilename(filetypes=[("Logi", "*.txt *.log"), ("Wszystkie", "*.*")])
-    if path:
-        file_var.set(path)
+    if path: file_var.set(path)
 
 def load_step_file(app, file_var, reverse_var):
     path = file_var.get()
@@ -51,8 +50,7 @@ def load_step_file(app, file_var, reverse_var):
         return
     try:
         frames = load_frames_from_file(path)
-        if reverse_var.get():
-            frames.reverse()
+        if reverse_var.get(): frames.reverse()
         app.step_frames = frames
         app.step_idx = 0
         app.step_info.config(text=f"Wczytano {len(frames)} ramek")

@@ -1,2 +1,3 @@
 from .simulation_thread import SimulationThread
 from .binary_search_thread import BinarySearchThread
+from .wizard_search_thread import WizardSearchThread

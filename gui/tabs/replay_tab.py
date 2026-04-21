@@ -59,7 +59,7 @@ def setup_replay_tab(app, tab):
     app.replay_log_var = log_var
     app.replay_log_enable = log_enable
 
-    start_btn.config(command=app.start_replay)
+    start_btn.config(command=app.replay_ctrl.start_replay)
     pause_btn.config(command=app.pause_sim)
     stop_btn.config(command=app.stop_sim)
 

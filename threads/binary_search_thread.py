@@ -18,6 +18,8 @@ except ImportError:
 from ml.feature_extractor import extract_features
 from ml.model import MLModel
 
+from session_manager import SessionManager
+
 logger = logging.getLogger("BinarySearchThread")
 
 
@@ -262,3 +264,9 @@ class BinarySearchThread(threading.Thread):
     def stop(self):
         self.running = False
         self.waiting_for_answer.set()
+
+    # ---------- Eksport sesji ----------
+    def export_session(self, settings, source_file, result=None):
+        return SessionManager.export_session(
+            self, 'binary', settings, source_file, len(self.frames), result
+        )
