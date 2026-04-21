@@ -6,4 +6,4 @@ from .step_controller import StepController
 from .manual_controller import ManualController
 from .binary_controller import BinaryController
 from .wizard_controller import WizardController
-from .sniffer_controller import SnifferController
+from .sniffer import SnifferController   # <-- zmiana
