@@ -7,7 +7,7 @@ import logging
 
 from can_interface import CanInterface
 from threads import SimulationThread, BinarySearchThread
-from gui.tabs import replay_tab, missing_tab, error_tab, step_tab, manual_tab, binary_tab, wizard_tab, sniffer_tab
+from gui.tabs import replay_tab, missing_tab, error_tab, step_tab, manual_tab, binary_tab, wizard_tab, sniffer_tab, chart_tab, ml_analysis_tab
 from gui.utils import write_log_to_file
 from controllers import (
     CanController, ReplayController, MissingController, ErrorController,
@@ -136,6 +136,14 @@ class CanSimulatorApp:
         self.tab_sniffer = ttk.Frame(self.notebook)
         self.notebook.add(self.tab_sniffer, text="Sniffer CAN")
         sniffer_tab.setup_sniffer_tab(self, self.tab_sniffer)
+
+        self.tab_chart = ttk.Frame(self.notebook)
+        self.notebook.add(self.tab_chart, text="Wykresy")
+        chart_tab.setup_chart_tab(self, self.tab_chart)
+
+        self.tab_ml = ttk.Frame(self.notebook)
+        self.notebook.add(self.tab_ml, text="Analiza ML")
+        ml_analysis_tab.setup_ml_tab(self, self.tab_ml)
 
         # Log
         frame_log = ttk.LabelFrame(self.root, text="Log", padding=5)

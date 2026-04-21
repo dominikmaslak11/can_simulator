@@ -6,3 +6,5 @@ from . import manual_tab
 from . import binary_tab
 from . import wizard_tab
 from . import sniffer_tab
+from . import chart_tab
+from . import ml_analysis_tab

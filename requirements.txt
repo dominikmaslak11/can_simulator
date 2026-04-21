@@ -5,3 +5,5 @@ xgboost>=1.7.0
 pytest-mock>=3.10.0
 pytest-timeout>=2.0.0
 torch>=2.0.0
+cantools>=39.0.0
+matplotlib>=3.5.0
