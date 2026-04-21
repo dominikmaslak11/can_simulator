@@ -17,8 +17,10 @@ def setup_sniffer_tab(app, tab):
     stop_btn.pack(side=tk.LEFT, padx=2)
     clear_btn = ttk.Button(toolbar, text="Wyczyść", command=app.sniffer_ctrl.clear_sniffer)
     clear_btn.pack(side=tk.LEFT, padx=2)
-    export_btn = ttk.Button(toolbar, text="Eksportuj", command=app.sniffer_ctrl.export_sniffer)
+    export_btn = ttk.Button(toolbar, text="Eksportuj (log)", command=app.sniffer_ctrl.export_sniffer)
     export_btn.pack(side=tk.LEFT, padx=2)
+    export_csv_btn = ttk.Button(toolbar, text="Eksportuj do CSV", command=app.sniffer_ctrl.export_csv)
+    export_csv_btn.pack(side=tk.LEFT, padx=2)
 
     filter_var = tk.BooleanVar(value=False)
     ttk.Checkbutton(toolbar, text="Filtruj ID", variable=filter_var,
@@ -39,7 +41,6 @@ def setup_sniffer_tab(app, tab):
     ttk.Checkbutton(toolbar, text="Widok bitowy", variable=bit_view_var,
                     command=app.sniffer_ctrl.toggle_bit_view).pack(side=tk.LEFT, padx=5)
 
-    # Nowe przyciski DBC
     dbc_load_btn = ttk.Button(toolbar, text="Wczytaj DBC", command=app.sniffer_ctrl.load_dbc_file)
     dbc_load_btn.pack(side=tk.LEFT, padx=5)
     dbc_status_label = ttk.Label(toolbar, text="Brak DBC")
