@@ -53,9 +53,13 @@ def setup_ml_tab(app, tab):
                            command=lambda: train_model(app, normal_var.get(), anomaly_var.get()))
     train_btn.pack(side=tk.LEFT, padx=5)
 
-    analyze_btn = ttk.Button(btn_frame, text="Analizuj log",
+    analyze_btn = ttk.Button(btn_frame, text="Analizuj log (nadzorowane)",
                              command=lambda: analyze_log(app, test_var.get()))
     analyze_btn.pack(side=tk.LEFT, padx=5)
+
+    unsupervised_btn = ttk.Button(btn_frame, text="Wykryj anomalie (bez nadzoru)",
+                                  command=lambda: detect_anomalies(app, test_var.get()))
+    unsupervised_btn.pack(side=tk.LEFT, padx=5)
 
     ttk.Label(btn_frame, text="Próg anomalii:").pack(side=tk.LEFT, padx=(20, 5))
     threshold_var = tk.DoubleVar(value=0.5)
@@ -154,7 +158,27 @@ def analyze_log(app, test_path):
     threading.Thread(target=analyze_thread, daemon=True).start()
 
 
-def draw_results(app, times, probs, test_frames):
+def detect_anomalies(app, test_path):
+    if not test_path:
+        messagebox.showerror("Błąd", "Wybierz log do analizy.")
+        return
+    try:
+        test_frames = load_frames_from_file(test_path)
+    except Exception as e:
+        messagebox.showerror("Błąd", f"Nie udało się wczytać pliku:\n{e}")
+        return
+
+    app.ml_status.set("Wykrywanie anomalii (bez nadzoru)...")
+    app.root.update()
+
+    def detect_thread():
+        times, probs = app.ml_classifier.detect_anomalies_unsupervised(test_frames)
+        app.root.after(0, lambda: draw_results(app, times, probs, test_frames, title="Wykrywanie anomalii (bez nadzoru)"))
+
+    threading.Thread(target=detect_thread, daemon=True).start()
+
+
+def draw_results(app, times, probs, test_frames, title="Analiza nadzorowana"):
     if len(times) == 0:
         app.ml_status.set("Brak danych do wyświetlenia.")
         return
@@ -170,17 +194,11 @@ def draw_results(app, times, probs, test_frames):
                     color='red', alpha=0.3, label='Anomalia')
     ax.set_xlabel("Czas [s]")
     ax.set_ylabel("Prawdopodobieństwo anomalii")
+    ax.set_title(title)
     ax.legend()
     ax.grid(True, linestyle='--', alpha=0.7)
     app.ml_canvas.draw()
 
-    # Podświetlenie w snifferze (jeśli log pochodzi ze sniffera)
-    if hasattr(app, 'sniffer_tree') and test_frames:
-        tree = app.sniffer_tree
-        for item in tree.get_children():
-            tree.item(item, tags=())
-        tree.tag_configure('anomaly', background='#FFB6C1')
-        app.ml_status.set(f"Analiza zakończona. Wykryto {sum(1 for p in probs if p >= app.ml_threshold.get())} anomalii.")
-        app.log(f"[ML] Analiza zakończona, wykryto anomalie.")
-    else:
-        app.ml_status.set(f"Analiza zakończona.")
+    anomaly_count = sum(1 for p in probs if p >= app.ml_threshold.get())
+    app.ml_status.set(f"Analiza zakończona. Wykryto {anomaly_count} anomalii.")
+    app.log(f"[ML] {title} – wykryto {anomaly_count} anomalii.")

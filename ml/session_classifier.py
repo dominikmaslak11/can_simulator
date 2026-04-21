@@ -17,6 +17,7 @@ except ImportError:
 from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import StandardScaler
 from sklearn.pipeline import make_pipeline
+from sklearn.ensemble import IsolationForest
 
 # Parametry okna czasowego
 WINDOW_SECONDS = 5.0
@@ -46,6 +47,7 @@ class SessionClassifier:
         self.input_dim = 10
         self.window_sec = WINDOW_SECONDS
         self.step_sec = STEP_SECONDS
+        self.isolation_forest = None   # model bez nadzoru
 
     def _extract_features_from_window(self, frames):
         if not frames:
@@ -118,7 +120,12 @@ class SessionClassifier:
             self._train_lstm(X, y)
         else:
             self._train_fallback(X, y)
-        logger.info("Model wytrenowany.")
+
+        # Trenuj również Isolation Forest na normalnych danych
+        if len(X_norm) > 0:
+            self.isolation_forest = IsolationForest(contamination=0.05, random_state=42)
+            self.isolation_forest.fit(X_norm)
+            logger.info("Isolation Forest wytrenowany na normalnych danych.")
         return True
 
     def _train_lstm(self, X, y):
@@ -156,6 +163,35 @@ class SessionClassifier:
             probs = self.fallback_model.predict_proba(X)[:, 1]
         else:
             probs = np.zeros(len(windows))
+
+        times = []
+        for w in windows:
+            if w:
+                t = np.mean([f[3] for f in w])
+                times.append(t)
+        return times, probs
+
+    def detect_anomalies_unsupervised(self, frames):
+        """Wykrywa anomalie za pomocą Isolation Forest (bez etykiet)."""
+        windows = self._sliding_windows(frames)
+        if not windows:
+            return [], []
+        X = np.array([self._extract_features_from_window(w) for w in windows])
+
+        if self.isolation_forest is None:
+            # Jeśli nie ma wytrenowanego modelu, trenuj na bieżących danych
+            self.isolation_forest = IsolationForest(contamination=0.05, random_state=42)
+            self.isolation_forest.fit(X)
+            logger.info("Isolation Forest wytrenowany na bieżącym logu.")
+
+        # -1 dla anomalii, 1 dla normalnych
+        preds = self.isolation_forest.predict(X)
+        # Konwertujemy na prawdopodobieństwo (0 = normalne, 1 = anomalia)
+        scores = self.isolation_forest.decision_function(X)
+        # Normalizacja do [0,1]
+        probs = 1.0 - (scores - scores.min()) / (scores.max() - scores.min() + 1e-8)
+        # Dla punktów sklasyfikowanych jako anomalie ustawiamy wyższe prawdopodobieństwo
+        probs[preds == -1] = np.maximum(probs[preds == -1], 0.8)
 
         times = []
         for w in windows:
