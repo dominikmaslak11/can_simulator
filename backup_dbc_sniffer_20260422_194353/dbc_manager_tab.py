@@ -92,8 +92,3 @@ def setup_dbc_manager_tab(app, parent):
                 signal_listbox.insert(tk.END, sig)
 
     app.dbc_signal_listbox = signal_listbox
-
-    # Automatyczne wczytanie ostatniego DBC
-    if hasattr(app, 'last_dbc_path') and app.last_dbc_path:
-        load_dbc(app.last_dbc_path)
-        dbc_path_var.set(app.last_dbc_path)
