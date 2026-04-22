@@ -12,7 +12,6 @@ from gui.tabs.anomaly_tab import setup_anomaly_tab
 from gui.tabs.remote_monitor_tab import setup_remote_monitor_tab
 from gui.tabs.dbc_manager_tab import setup_dbc_manager_tab
 from gui.tabs.bridge_tab import setup_bridge_tab
-from gui.tabs.recording_tab import setup_recording_tab
 from gui.utils import write_log_to_file
 from controllers import (
     CanController, ReplayController, MissingController, ErrorController,
@@ -465,10 +464,6 @@ class CanSimulatorApp:
         tab_bridge = ttk.Frame(notebook)
         notebook.add(tab_bridge, text="Mostek vCAN")
         setup_bridge_tab(self, tab_bridge)
-
-        tab_recording = ttk.Frame(notebook)
-        notebook.add(tab_recording, text="Nagrywanie sesji")
-        setup_recording_tab(self, tab_recording)
 
 
     def _create_macro_frame(self, parent):

@@ -1,25 +1,3 @@
-#!/bin/bash
-# =============================================================================
-# Etap 15: Nagrywanie i odtwarzanie sesji CAN (format candump)
-# =============================================================================
-
-set -e
-
-BASE_DIR="$(pwd)"
-APP_FILE="${BASE_DIR}/gui/app.py"
-RECORDING_TAB="${BASE_DIR}/gui/tabs/recording_tab.py"
-BACKUP_DIR="${BASE_DIR}/backup_recording_$(date +%Y%m%d_%H%M%S)"
-
-echo "=== Etap 15: Nagrywanie sesji CAN ==="
-
-mkdir -p "$BACKUP_DIR"
-cp "$APP_FILE" "$BACKUP_DIR/"
-echo "Kopie zapasowe w: $BACKUP_DIR"
-
-# -----------------------------------------------------------------------------
-# 1. Utwórz zakładkę recording_tab.py
-# -----------------------------------------------------------------------------
-cat > "$RECORDING_TAB" << 'EOF'
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 import threading
@@ -162,53 +140,3 @@ class RecordingTab:
 
 def setup_recording_tab(app, parent):
     RecordingTab(parent, app)
-EOF
-
-echo "Utworzono gui/tabs/recording_tab.py"
-
-# -----------------------------------------------------------------------------
-# 2. Dodanie zakładki do kategorii "Sieć i zdalny dostęp"
-# -----------------------------------------------------------------------------
-python3 - "$APP_FILE" <<'EOF'
-import re, sys
-file_path = sys.argv[1]
-with open(file_path, 'r', encoding='utf-8') as f:
-    content = f.read()
-
-# Dodaj import
-if 'from gui.tabs.recording_tab import setup_recording_tab' not in content:
-    content = re.sub(
-        r'(from gui\.tabs\.bridge_tab import setup_bridge_tab)',
-        r'\1\nfrom gui.tabs.recording_tab import setup_recording_tab',
-        content
-    )
-
-# Dodaj zakładkę w _create_network_frame
-network_frame = r'(def _create_network_frame\(self, parent\):.*?)(?=\n    def _create_macro_frame)'
-if re.search(network_frame, content, flags=re.DOTALL):
-    # Wstawiamy nową zakładkę po "Mostek vCAN"
-    pattern = r'(        tab_bridge = ttk\.Frame\(notebook\)\n        notebook\.add\(tab_bridge, text="Mostek vCAN"\)\n        setup_bridge_tab\(self, tab_bridge\)\n)'
-    replacement = r'\1\n        tab_recording = ttk.Frame(notebook)\n        notebook.add(tab_recording, text="Nagrywanie sesji")\n        setup_recording_tab(self, tab_recording)\n'
-    content = re.sub(pattern, replacement, content)
-    print("app.py: dodano zakładkę 'Nagrywanie sesji'.")
-else:
-    print("UWAGA: Nie znaleziono _create_network_frame w app.py")
-
-with open(file_path, 'w', encoding='utf-8') as f:
-    f.write(content)
-EOF
-
-echo ""
-echo "=== Etap 15 zakończony pomyślnie ==="
-echo "Nowa zakładka 'Nagrywanie sesji' w kategorii 'Sieć i zdalny dostęp'."
-echo ""
-echo "Funkcje:"
-echo "  - Nagrywanie ramek CAN do pliku w formacie candump"
-echo "  - Opcjonalny limit czasu nagrywania"
-echo "  - Szybkie odtworzenie nagrania w zakładce 'Odtwarzanie pliku'"
-echo ""
-echo "Uruchom aplikację: sudo ./run.sh"
-echo "Wypchnij zmiany na GitHub:"
-echo "  git add -A"
-echo "  git commit -m 'Etap 15: Nagrywanie i odtwarzanie sesji CAN'"
-echo "  git push"
