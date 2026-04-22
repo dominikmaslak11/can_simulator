@@ -11,3 +11,4 @@ from . import ml_analysis_tab
 from . import pattern_tab
 from . import server_tab
 from . import generator_tab
+from . import macro_tab

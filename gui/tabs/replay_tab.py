@@ -2,6 +2,46 @@ import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 from parsers import load_frames_from_file
 
+
+def export_replay_asc(app):
+    """Eksportuje wczytany plik do formatu ASC."""
+    from tkinter import filedialog
+    import datetime
+    import os
+
+    if not app.loaded_frames:
+        messagebox.showerror("Błąd", "Najpierw wczytaj plik.")
+        return
+
+    filepath = filedialog.asksaveasfilename(defaultextension=".asc", filetypes=[("Pliki ASC", "*.asc")])
+    if not filepath:
+        return
+
+    frames = app.loaded_frames
+    with open(filepath, 'w', encoding='utf-8') as f:
+        f.write("date %s\n" % datetime.datetime.now().strftime("%a %b %d %H:%M:%S %Y"))
+        f.write("base hex  timestamps absolute\n")
+        f.write("internal events logged\n")
+        f.write("// Eksport z CAN Simulator GUI\n")
+
+        if frames:
+            start_ts = frames[0][3] if frames[0][3] is not None else 0.0
+        else:
+            start_ts = 0.0
+
+        for can_id, data, is_ext, ts in frames:
+            if ts is None:
+                ts = 0.0
+            relative_time = ts - start_ts
+            id_str = f"{can_id:08X}"
+            dlc = len(data)
+            line = f" {relative_time:12.6f} 1  {id_str}x  Rx  d {dlc}"
+            for byte in data:
+                line += f" {byte:02X}"
+            f.write(line + "\n")
+    app.log(f"Wyeksportowano {len(frames)} ramek do ASC: {filepath}")
+
+
 def setup_replay_tab(app, tab):
     frame = ttk.Frame(tab, padding=10)
     frame.pack(fill=tk.BOTH, expand=True)

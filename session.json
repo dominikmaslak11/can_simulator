@@ -1,0 +1,47 @@
+{
+  "version": "2.0",
+  "timestamp": "2026-04-22T09:08:55.534947",
+  "can_interface": "can0",
+  "notebook_tab": 0,
+  "files": {
+    "replay": "",
+    "binary": "",
+    "wizard": "",
+    "normal_log": "",
+    "anomaly_log": "",
+    "test_log": "",
+    "pattern_train": "",
+    "pattern_test": ""
+  },
+  "settings": {
+    "replay_interval": 0.5,
+    "replay_speed": 1.0,
+    "replay_loop": true,
+    "replay_use_timestamps": false,
+    "missing_use_timestamps": false,
+    "missing_ref_file": "",
+    "error_interval": 10.0,
+    "error_use_timestamps": false,
+    "error_ref_file": "",
+    "binary_interval": 0.1,
+    "binary_mode": "find_start",
+    "binary_parts": 2,
+    "binary_use_timestamps": false,
+    "wizard_parts": 2,
+    "wizard_interval": 0.1,
+    "wizard_use_timestamps": false,
+    "sniffer_filter": false,
+    "sniffer_filter_text": "",
+    "sniffer_keep_alive": false,
+    "sniffer_overwrite": false,
+    "sniffer_bit_view": false,
+    "ml_threshold": 0.5,
+    "server_port": 5555,
+    "generator_loop": false
+  },
+  "tables": {
+    "missing_frames": [],
+    "error_frames": [],
+    "generator_frames": []
+  }
+}

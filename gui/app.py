@@ -7,7 +7,7 @@ import logging
 
 from can_interface import CanInterface
 from threads import SimulationThread, BinarySearchThread
-from gui.tabs import replay_tab, missing_tab, error_tab, step_tab, manual_tab, binary_tab, wizard_tab, sniffer_tab, chart_tab, ml_analysis_tab, pattern_tab, server_tab, generator_tab
+from gui.tabs import replay_tab, missing_tab, error_tab, step_tab, manual_tab, binary_tab, wizard_tab, sniffer_tab, chart_tab, ml_analysis_tab, pattern_tab, server_tab, generator_tab, macro_tab
 from gui.utils import write_log_to_file
 from controllers import (
     CanController, ReplayController, MissingController, ErrorController,
@@ -74,8 +74,10 @@ class CanSimulatorApp:
         # Rejestr artefaktów
         self.discovered_artifacts = {}
 
+        self.theme_var = tk.StringVar(value="light")
         self._create_widgets()
         self.bind_shortcuts()
+        self.setup_detachable_tabs()
         self.load_session()
         logger.info("Interfejs GUI utworzony")
 
@@ -119,6 +121,8 @@ class CanSimulatorApp:
         self.btn_import = ttk.Button(frame_conn, text="Importuj projekt", command=self.import_project)
         self.btn_reset = ttk.Button(frame_conn, text="Resetuj sesję", command=self.reset_session)
         self.btn_reset.grid(row=0, column=6, padx=5)
+        self.btn_theme = ttk.Button(frame_conn, text="Zmień motyw", command=self.toggle_theme)
+        self.btn_theme.grid(row=0, column=8, padx=5)
         self.btn_import.grid(row=0, column=5, padx=5)
 
         self.lbl_status = ttk.Label(frame_conn, text="Niepołączony", foreground="red")
@@ -168,6 +172,9 @@ class CanSimulatorApp:
         self.tab_pattern = ttk.Frame(self.notebook)
         self.tab_server = ttk.Frame(self.notebook)
         self.tab_generator = ttk.Frame(self.notebook)
+        self.tab_macro = ttk.Frame(self.notebook)
+        self.notebook.add(self.tab_macro, text="Makra")
+        macro_tab.setup_macro_tab(self, self.tab_macro)
         self.notebook.add(self.tab_generator, text="Generator ruchu")
         generator_tab.setup_generator_tab(self, self.tab_generator)
         self.notebook.add(self.tab_server, text="Serwer TCP")
@@ -367,6 +374,56 @@ class CanSimulatorApp:
         from session_manager import SessionManager
         if SessionManager.load_session(self):
             self.log("Przywrócono poprzednią sesję.")
+    
+    def show_help(self, event=None):
+        """Wyświetla okno pomocy."""
+        help_win = tk.Toplevel(self.root)
+        help_win.title("Pomoc – CAN Simulator GUI")
+        help_win.geometry("650x500")
+        help_win.transient(self.root)
+        help_win.grab_set()
+
+        text = tk.Text(help_win, wrap=tk.WORD, padx=10, pady=10)
+        text.pack(fill=tk.BOTH, expand=True)
+
+        help_content = """CAN Simulator GUI – skróty i wskazówki
+
+SKRÓTY KLAWISZOWE:
+  F1          – Pokaż to okno pomocy
+  F5          – Start Sniffera
+  F6          – Stop Sniffera
+  F7 / Ctrl+L – Wyczyść Sniffera
+  Ctrl+S      – Eksportuj projekt
+  Ctrl+O      – Importuj projekt
+
+ZAKŁADKI:
+  • Odtwarzanie pliku – wczytaj candump i odtwórz z interwałem.
+  • Symulacja modułu – zdefiniuj ramki wysyłane cyklicznie.
+  • Ramki błędu – zdefiniuj sekwencję symulującą błąd.
+  • Tryb krokowy – ręczne wysyłanie ramek z pliku.
+  • Wysyłanie ręczne – wyślij pojedynczą ramkę.
+  • Wyszukiwanie binarne – interaktywne znajdowanie ramki odpowiedzialnej za zjawisko.
+  • Kreator wyszukiwania – znajdowanie konkretnej ramki/sekwencji.
+  • Sniffer CAN – podgląd ruchu na magistrali w czasie rzeczywistym.
+  • Wykresy – wizualizacja zmian wartości bajtów w czasie.
+  • Serwer TCP – udostępnienie strumienia CAN przez sieć.
+  • Analiza wzorców – wykrywanie anomalii za pomocą autoenkodera.
+  • Analiza ML – klasyfikacja sesji, wykrywanie anomalii.
+  • Generator ruchu – definiowanie własnych sekwencji testowych.
+  • Makra – nagrywanie i odtwarzanie sekwencji akcji.
+
+PRZYKŁADOWY PROJEKT:
+  Kliknij przycisk „Przykładowy projekt” w głównym oknie,
+  aby wygenerować zestaw plików demonstracyjnych w katalogu domowym.
+
+WIĘCEJ INFORMACJI:
+  Pełna dokumentacja dostępna na GitHub Wiki projektu.
+"""
+        text.insert(tk.END, help_content)
+        text.config(state=tk.DISABLED)
+
+        ttk.Button(help_win, text="Zamknij", command=help_win.destroy).pack(pady=5)
+
     def on_closing(self):
         self.manual_cyclic_active = False
         if self.sim_thread:
@@ -412,3 +469,82 @@ class CanSimulatorApp:
             self.log(f"Projekt zaimportowany z {filepath}")
         except Exception as e:
             messagebox.showerror("Błąd importu", str(e))
+
+    def detach_tab(self, tab_index):
+        """Odrywa zakładkę do osobnego okna."""
+        tab_frame = self.notebook.nametowidget(self.notebook.tabs()[tab_index])
+        tab_text = self.notebook.tab(tab_index, 'text')
+        self.notebook.forget(tab_index)
+
+        new_win = tk.Toplevel(self.root)
+        new_win.title(f"CAN Simulator – {tab_text}")
+        new_win.geometry("800x600")
+        new_win.protocol("WM_DELETE_WINDOW", lambda: self.attach_tab(tab_frame, tab_text, new_win))
+        tab_frame.pack(fill=tk.BOTH, expand=True)
+
+    def attach_tab(self, tab_frame, tab_text, popup):
+        """Przywraca zakładkę do głównego okna."""
+        popup.destroy()
+        self.notebook.add(tab_frame, text=tab_text)
+        self.notebook.select(tab_frame)
+
+    def setup_detachable_tabs(self):
+        """Dodaje menu kontekstowe do zakładek."""
+        self.notebook.bind('<Button-3>', self._show_tab_menu)
+        self.tab_menu = tk.Menu(self.root, tearoff=0)
+        self.tab_menu.add_command(label="Oderwij zakładkę", command=self._detach_selected_tab)
+
+    def _show_tab_menu(self, event):
+        """Pokazuje menu kontekstowe po kliknięciu prawym na zakładkę."""
+        try:
+            self.tab_menu.tk_popup(event.x_root, event.y_root)
+        finally:
+            self.tab_menu.grab_release()
+
+    def _detach_selected_tab(self):
+        tab_index = self.notebook.index('@%d,%d' % (self.tab_menu.winfo_pointerx(), self.tab_menu.winfo_pointery()))
+        self.detach_tab(tab_index)
+
+    def show_progress(self, title="Proszę czekać", maximum=100):
+        """Pokazuje okno z paskiem postępu."""
+        self.progress_win = tk.Toplevel(self.root)
+        self.progress_win.title(title)
+        self.progress_win.geometry("300x100")
+        self.progress_win.transient(self.root)
+        self.progress_win.grab_set()
+        tk.Label(self.progress_win, text=title).pack(pady=10)
+        self.progress_bar = ttk.Progressbar(self.progress_win, length=250, mode='determinate', maximum=maximum)
+        self.progress_bar.pack(pady=10)
+        return self.progress_bar
+
+    def hide_progress(self):
+        if hasattr(self, 'progress_win'):
+            self.progress_win.destroy()
+
+    def toggle_theme(self):
+        """Przełącza między jasnym a ciemnym motywem."""
+        if self.theme_var.get() == "light":
+            self._apply_dark_theme()
+            self.theme_var.set("dark")
+        else:
+            self._apply_light_theme()
+            self.theme_var.set("light")
+        self.log(f"Motyw zmieniony na {self.theme_var.get()}")
+
+    def _apply_dark_theme(self):
+        style = ttk.Style()
+        style.theme_use('clam')
+        style.configure('.', background='#2e2e2e', foreground='#ffffff')
+        style.configure('TLabel', background='#2e2e2e', foreground='#ffffff')
+        style.configure('TFrame', background='#2e2e2e')
+        style.configure('TLabelframe', background='#2e2e2e', foreground='#ffffff')
+        style.configure('TNotebook', background='#2e2e2e', foreground='#ffffff')
+        style.configure('TNotebook.Tab', background='#3e3e3e', foreground='#ffffff')
+        self.root.configure(bg='#2e2e2e')
+        self.log_text.configure(bg='#1e1e1e', fg='#ffffff')
+
+    def _apply_light_theme(self):
+        style = ttk.Style()
+        style.theme_use('default')
+        self.root.configure(bg='#f0f0f0')
+        self.log_text.configure(bg='white', fg='black')

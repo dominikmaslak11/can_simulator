@@ -184,3 +184,47 @@ class DbcHandler:
             tree_signals.insert("", tk.END, values=(sig_name, f"{value:.3f}", unit, min_val, max_val))
 
         ttk.Button(win, text="Zamknij", command=win.destroy).pack(pady=10)
+
+    def open_dbc_editor(self):
+        """Otwiera okno edytora DBC."""
+        if not self.dbc_db:
+            messagebox.showinfo("Brak DBC", "Najpierw wczytaj plik DBC.")
+            return
+
+        win = tk.Toplevel(self.app.root)
+        win.title("Edytor DBC")
+        win.geometry("800x600")
+        win.transient(self.app.root)
+        win.grab_set()
+
+        tree = ttk.Treeview(win, columns=('message', 'signal', 'start', 'length'), show='headings')
+        tree.heading('message', text='ID (hex)')
+        tree.heading('signal', text='Sygnał')
+        tree.heading('start', text='Start bit')
+        tree.heading('length', text='Długość')
+
+        for msg in self.dbc_db.messages:
+            for sig in msg.signals:
+                tree.insert('', tk.END, values=(
+                    f"0x{msg.frame_id:08X}",
+                    sig.name,
+                    sig.start,
+                    sig.length
+                ))
+
+        tree.pack(fill=tk.BOTH, expand=True)
+        ttk.Button(win, text="Zapisz jako...", command=lambda: self.save_dbc_as()).pack(pady=10)
+
+    def save_dbc_as(self):
+        """Zapisuje aktualną bazę DBC do nowego pliku."""
+        from tkinter import filedialog
+        import cantools
+
+        filepath = filedialog.asksaveasfilename(defaultextension=".dbc", filetypes=[("Pliki DBC", "*.dbc")])
+        if not filepath:
+            return
+        try:
+            cantools.database.dump_file(self.dbc_db, filepath)
+            self.log(f"[DBC] Zapisano do {filepath}")
+        except Exception as e:
+            messagebox.showerror("Błąd zapisu", str(e))

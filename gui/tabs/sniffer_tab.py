@@ -1,4 +1,5 @@
 import tkinter as tk
+from gui.widgets.virtual_treeview import VirtualTreeview
 from tkinter import ttk, filedialog, messagebox
 from datetime import datetime
 import threading
@@ -20,6 +21,12 @@ def setup_sniffer_tab(app, tab):
     export_btn = ttk.Button(toolbar, text="Eksportuj (log)", command=app.sniffer_ctrl.export_sniffer)
     export_btn.pack(side=tk.LEFT, padx=2)
     export_csv_btn = ttk.Button(toolbar, text="Eksportuj do CSV", command=app.sniffer_ctrl.export_csv)
+    export_asc_btn = ttk.Button(toolbar, text="Eksportuj do ASC", command=app.sniffer_ctrl.export_asc)
+    export_parquet_btn = ttk.Button(toolbar, text="Eksportuj do Parquet", command=app.sniffer_ctrl.export_parquet)
+    export_mdf4_btn = ttk.Button(toolbar, text="Eksportuj do MDF4", command=app.sniffer_ctrl.export_mdf4)
+    export_mdf4_btn.pack(side=tk.LEFT, padx=2)
+    export_parquet_btn.pack(side=tk.LEFT, padx=2)
+    export_asc_btn.pack(side=tk.LEFT, padx=2)
     export_csv_btn.pack(side=tk.LEFT, padx=2)
 
     filter_var = tk.BooleanVar(value=False)
@@ -42,6 +49,8 @@ def setup_sniffer_tab(app, tab):
                     command=app.sniffer_ctrl.toggle_bit_view).pack(side=tk.LEFT, padx=5)
 
     dbc_load_btn = ttk.Button(toolbar, text="Wczytaj DBC", command=app.sniffer_ctrl.load_dbc_file)
+    dbc_edit_btn = ttk.Button(toolbar, text="Edytor DBC", command=app.sniffer_ctrl.open_dbc_editor)
+    dbc_edit_btn.pack(side=tk.LEFT, padx=2)
     dbc_load_btn.pack(side=tk.LEFT, padx=5)
     dbc_status_label = ttk.Label(toolbar, text="Brak DBC")
     dbc_status_label.pack(side=tk.LEFT, padx=2)
@@ -53,7 +62,7 @@ def setup_sniffer_tab(app, tab):
     columns_normal = ('timestamp', 'id', 'ext', 'dlc', 'data')
     columns_bit = ('timestamp', 'id', 'ext', 'dlc', 'bits')
 
-    tree = ttk.Treeview(tree_frame, columns=columns_normal, show='headings', height=20)
+    tree = VirtualTreeview(tree_frame, columns=columns_normal, show='headings', height=20)
     tree.heading('timestamp', text='Czas')
     tree.heading('id', text='ID')
     tree.heading('ext', text='EXT')

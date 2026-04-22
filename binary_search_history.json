@@ -1,12 +1,12 @@
 [
   {
-    "timestamp": "2026-04-21T10:22:00.031317",
+    "timestamp": "2026-04-22T08:44:35.966180",
     "action": "start",
-    "mode": "manual_parts",
+    "mode": "find_start",
     "left": 0,
-    "right": 5876,
+    "right": 9,
     "mid": 0,
-    "total_frames": 5877,
-    "num_parts": 13
+    "total_frames": 10,
+    "num_parts": null
   }
 ]

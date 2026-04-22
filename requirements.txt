@@ -7,3 +7,5 @@ pytest-timeout>=2.0.0
 torch>=2.0.0
 cantools>=39.0.0
 matplotlib>=3.5.0
+pyarrow>=14.0.0
+asammdf>=7.0.0
