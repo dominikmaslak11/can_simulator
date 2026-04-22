@@ -3,14 +3,14 @@ from tkinter import ttk, messagebox
 import threading
 import queue
 import logging
+
+# Import klasy mostka (zakładamy, że bridge_client.py jest w PYTHONPATH)
 import sys
 import os
-
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 from bridge_client import VCanBridge
 
 logger = logging.getLogger(__name__)
-
 
 class BridgeTab:
     def __init__(self, parent, app):
@@ -36,16 +36,8 @@ class BridgeTab:
         self.token_var = tk.StringVar()
         ttk.Entry(frame, textvariable=self.token_var, width=30, show="*").grid(row=1, column=1, padx=5)
 
-        ttk.Label(frame, text="Filtruj ID (opcjonalnie):").grid(row=2, column=0, sticky=tk.W, padx=5, pady=2)
-        self.filter_var = tk.StringVar()
-        ttk.Entry(frame, textvariable=self.filter_var, width=40).grid(row=2, column=1, padx=5)
-        ttk.Label(frame, text="(lista oddzielona przecinkami, np. 0x123,0x456)").grid(row=3, column=1, sticky=tk.W, padx=5)
-
-        self.auto_reconnect_var = tk.BooleanVar(value=True)
-        ttk.Checkbutton(frame, text="Automatycznie ponawiaj połączenie", variable=self.auto_reconnect_var).grid(row=4, column=0, columnspan=2, sticky=tk.W, padx=5, pady=2)
-
         btn_frame = ttk.Frame(frame)
-        btn_frame.grid(row=5, column=0, columnspan=2, pady=10)
+        btn_frame.grid(row=2, column=0, columnspan=2, pady=10)
 
         self.start_btn = ttk.Button(btn_frame, text="Start mostka", command=self.start_bridge)
         self.start_btn.pack(side=tk.LEFT, padx=5)
@@ -90,24 +82,7 @@ class BridgeTab:
         url = self.url_var.get().strip()
         token = self.token_var.get().strip() or None
 
-        # Parsowanie filtrów ID
-        filter_str = self.filter_var.get().strip()
-        filter_ids = None
-        if filter_str:
-            try:
-                filter_ids = [int(x.strip(), 16) if x.strip().startswith('0x') else int(x.strip())
-                              for x in filter_str.split(',')]
-            except ValueError:
-                messagebox.showerror("Błąd", "Nieprawidłowy format listy ID. Użyj liczb dziesiętnych lub szesnastkowych z 0x.")
-                return
-
-        self.bridge = VCanBridge(
-            url=url,
-            token=token,
-            filter_ids=filter_ids,
-            auto_reconnect=self.auto_reconnect_var.get(),
-            status_callback=self._status_callback
-        )
+        self.bridge = VCanBridge(url, token, status_callback=self._status_callback)
         self.bridge_thread = threading.Thread(target=self._run_bridge, daemon=True)
         self.bridge_thread.start()
 
@@ -118,6 +93,7 @@ class BridgeTab:
 
     def _run_bridge(self):
         self.bridge.start()
+        # Po zakończeniu (np. błąd) odśwież GUI
         self.parent.after(0, self._bridge_stopped)
 
     def stop_bridge(self):
@@ -130,7 +106,6 @@ class BridgeTab:
         self.stop_btn.config(state=tk.DISABLED)
         self.status_var.set("Zatrzymany")
         self._append_log("Mostek zatrzymany.")
-
 
 def setup_bridge_tab(app, parent):
     BridgeTab(parent, app)
