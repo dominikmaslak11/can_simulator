@@ -7,7 +7,7 @@ import logging
 
 from can_interface import CanInterface
 from threads import SimulationThread, BinarySearchThread
-from gui.tabs import replay_tab, missing_tab, error_tab, step_tab, manual_tab, binary_tab, wizard_tab, sniffer_tab, chart_tab, ml_analysis_tab, pattern_tab, server_tab, generator_tab, macro_tab
+from gui.tabs import replay_tab, missing_tab, error_tab, step_tab, manual_tab, binary_tab, wizard_tab, sniffer_tab, chart_tab, ml_analysis_tab, pattern_tab, server_tab, generator_tab, macro_tab, advanced_ml_tab
 from gui.utils import write_log_to_file
 from controllers import (
     CanController, ReplayController, MissingController, ErrorController,
@@ -173,6 +173,9 @@ class CanSimulatorApp:
         self.tab_server = ttk.Frame(self.notebook)
         self.tab_generator = ttk.Frame(self.notebook)
         self.tab_macro = ttk.Frame(self.notebook)
+        self.tab_advanced_ml = ttk.Frame(self.notebook)
+        self.notebook.add(self.tab_advanced_ml, text="Zaawansowane ML")
+        advanced_ml_tab.setup_advanced_ml_tab(self, self.tab_advanced_ml)
         self.notebook.add(self.tab_macro, text="Makra")
         macro_tab.setup_macro_tab(self, self.tab_macro)
         self.notebook.add(self.tab_generator, text="Generator ruchu")

@@ -1,237 +1,68 @@
 #!/bin/bash
-# update.sh – Etap C: Integracja z ekosystemem (Parquet, MDF4, edytor DBC)
-# Uruchom w głównym katalogu projektu (can_simulator)
+
+# Skrypt naprawia błędy w advanced_ml_tab.py:
+# 1. Zastępuje forecast_frame -> frame w konfiguracjach grid
+# 2. Przenosi canvas do wiersza 5 w setup_forecast_tab
+# 3. Konfiguruje odpowiednie wiersze/kolumny
 
 set -e
 
-echo "==> Rozpoczynam aktualizację – Etap C: Integracja z ekosystemem"
+TARGET_FILE="gui/tabs/advanced_ml_tab.py"
 
-# ----------------------------------------------------------------------
-# 1. Dodanie zależności
-# ----------------------------------------------------------------------
-echo "  -> Aktualizacja requirements.txt"
-
-if ! grep -q "pyarrow" requirements.txt; then
-    echo "pyarrow>=14.0.0" >> requirements.txt
+if [ ! -f "$TARGET_FILE" ]; then
+    if [ -f "../$TARGET_FILE" ]; then
+        TARGET_FILE="../$TARGET_FILE"
+    elif [ -f "../../$TARGET_FILE" ]; then
+        TARGET_FILE="../../$TARGET_FILE"
+    else
+        echo "BŁĄD: Nie znaleziono advanced_ml_tab.py"
+        exit 1
+    fi
 fi
-if ! grep -q "asammdf" requirements.txt; then
-    echo "asammdf>=7.0.0" >> requirements.txt
-fi
 
-# Instalacja nowych bibliotek
-source venv/bin/activate
-pip install pyarrow asammdf
+echo "Plik docelowy: $TARGET_FILE"
 
-# ----------------------------------------------------------------------
-# 2. Eksport do Parquet w Snifferze
-# ----------------------------------------------------------------------
-echo "  -> Dodawanie eksportu do Parquet"
+# Kopia zapasowa
+BACKUP_FILE="${TARGET_FILE}.backup_$(date +%Y%m%d_%H%M%S)"
+cp "$TARGET_FILE" "$BACKUP_FILE"
+echo "Kopia zapasowa: $BACKUP_FILE"
 
-cat >> controllers/sniffer/export.py << 'EOF'
+# 1. Zamiana forecast_frame na frame w liniach grid_rowconfigure/grid_columnconfigure
+#    (dotyczy wszystkich trzech funkcji)
+sed -i 's/forecast_frame\.grid_rowconfigure/frame.grid_rowconfigure/g' "$TARGET_FILE"
+sed -i 's/forecast_frame\.grid_columnconfigure/frame.grid_columnconfigure/g' "$TARGET_FILE"
 
-    def export_parquet(self):
-        """Eksportuje zawartość tabeli do pliku Parquet."""
-        from tkinter import filedialog
-        import pyarrow as pa
-        import pyarrow.parquet as pq
+# 2. W setup_forecast_tab:
+#    a) Zmieniamy row z 1 na 5 dla canvas
+#    b) Dodajemy konfigurację wiersza 5 z weight=1 (po canvas)
+#    c) Ustawiamy weight=0 dla wcześniejszych wierszy, aby nie rozciągały się
 
-        filepath = filedialog.asksaveasfilename(
-            defaultextension=".parquet",
-            filetypes=[("Pliki Parquet", "*.parquet"), ("Wszystkie pliki", "*.*")]
-        )
-        if not filepath:
-            return
+# Tworzymy tymczasowy plik z poprawkami dla funkcji setup_forecast_tab
+awk '
+/setup_forecast_tab\(app, frame\):/ { in_func = 1 }
+in_func && /canvas\.get_tk_widget\(\)\.grid\(row=1,/ {
+    sub(/row=1/, "row=5")
+    print $0
+    # Po tej linii dodajemy konfiguracje
+    print "    frame.grid_rowconfigure(5, weight=1)"
+    print "    frame.grid_rowconfigure(0, weight=0)"
+    print "    frame.grid_rowconfigure(1, weight=0)"
+    print "    frame.grid_rowconfigure(2, weight=0)"
+    print "    frame.grid_rowconfigure(3, weight=0)"
+    print "    frame.grid_rowconfigure(4, weight=0)"
+    next
+}
+in_func && /^def / { in_func = 0 }
+{ print }
+' "$TARGET_FILE" > "${TARGET_FILE}.tmp"
 
-        tree = self.app.sniffer_tree
-        rows = []
-        for item in tree.get_children():
-            values = tree.item(item, 'values')
-            if len(values) >= 5:
-                timestamp = values[0]
-                can_id = int(values[1], 16)
-                data_hex = values[4]
-                if ' ' in data_hex:
-                    data_hex = self._bits_to_hex(data_hex)
-                rows.append({
-                    'timestamp': timestamp,
-                    'can_id': can_id,
-                    'data': data_hex,
-                    'dlc': len(bytes.fromhex(data_hex))
-                })
+mv "${TARGET_FILE}.tmp" "$TARGET_FILE"
 
-        if rows:
-            table = pa.Table.from_pylist(rows)
-            pq.write_table(table, filepath)
-            self.log(f"[Sniffer] Wyeksportowano {len(rows)} ramek do Parquet: {filepath}")
-EOF
-
-# Dodanie przycisku w sniffer_tab.py
-python3 << 'PYTHON_EOF'
-with open('gui/tabs/sniffer_tab.py', 'r', encoding='utf-8') as f:
-    content = f.read()
-
-if 'text="Eksportuj do Parquet"' not in content:
-    content = content.replace(
-        'export_asc_btn = ttk.Button(toolbar, text="Eksportuj do ASC", command=app.sniffer_ctrl.export_asc)',
-        'export_asc_btn = ttk.Button(toolbar, text="Eksportuj do ASC", command=app.sniffer_ctrl.export_asc)\n    export_parquet_btn = ttk.Button(toolbar, text="Eksportuj do Parquet", command=app.sniffer_ctrl.export_parquet)\n    export_parquet_btn.pack(side=tk.LEFT, padx=2)'
-    )
-    with open('gui/tabs/sniffer_tab.py', 'w', encoding='utf-8') as f:
-        f.write(content)
-print("Dodano przycisk eksportu Parquet w Snifferze.")
-PYTHON_EOF
-
-# ----------------------------------------------------------------------
-# 3. Eksport do MDF4
-# ----------------------------------------------------------------------
-echo "  -> Dodawanie eksportu do MDF4"
-
-cat >> controllers/sniffer/export.py << 'EOF'
-
-    def export_mdf4(self):
-        """Eksportuje zawartość tabeli do pliku MDF4."""
-        from tkinter import filedialog
-        import asammdf
-        import numpy as np
-        from datetime import datetime
-
-        filepath = filedialog.asksaveasfilename(
-            defaultextension=".mf4",
-            filetypes=[("Pliki MDF4", "*.mf4"), ("Wszystkie pliki", "*.*")]
-        )
-        if not filepath:
-            return
-
-        tree = self.app.sniffer_tree
-        signals = {}
-        timestamps = []
-
-        for item in tree.get_children():
-            values = tree.item(item, 'values')
-            if len(values) >= 5:
-                ts_str = values[0]
-                try:
-                    dt = datetime.strptime(ts_str, "%H:%M:%S.%f")
-                    t = dt.hour*3600 + dt.minute*60 + dt.second + dt.microsecond/1e6
-                except:
-                    t = 0.0
-                timestamps.append(t)
-                can_id = values[1]
-                data_hex = values[4]
-                if ' ' in data_hex:
-                    data_hex = self._bits_to_hex(data_hex)
-                data_bytes = bytes.fromhex(data_hex)
-                for i, byte in enumerate(data_bytes):
-                    sig_name = f"{can_id}_B{i}"
-                    signals.setdefault(sig_name, []).append(byte)
-
-        if timestamps:
-            mdf = asammdf.MDF()
-            timestamps_np = np.array(timestamps, dtype=np.float64)
-            for name, values in signals.items():
-                if len(values) == len(timestamps):
-                    sig = asammdf.Signal(
-                        samples=np.array(values, dtype=np.uint8),
-                        timestamps=timestamps_np,
-                        name=name,
-                        unit=''
-                    )
-                    mdf.append(sig)
-            mdf.save(filepath, overwrite=True)
-            self.log(f"[Sniffer] Wyeksportowano do MDF4: {filepath}")
-EOF
-
-# Dodanie przycisku
-python3 << 'PYTHON_EOF'
-with open('gui/tabs/sniffer_tab.py', 'r', encoding='utf-8') as f:
-    content = f.read()
-
-if 'text="Eksportuj do MDF4"' not in content:
-    content = content.replace(
-        'export_parquet_btn = ttk.Button(toolbar, text="Eksportuj do Parquet", command=app.sniffer_ctrl.export_parquet)',
-        'export_parquet_btn = ttk.Button(toolbar, text="Eksportuj do Parquet", command=app.sniffer_ctrl.export_parquet)\n    export_mdf4_btn = ttk.Button(toolbar, text="Eksportuj do MDF4", command=app.sniffer_ctrl.export_mdf4)\n    export_mdf4_btn.pack(side=tk.LEFT, padx=2)'
-    )
-    with open('gui/tabs/sniffer_tab.py', 'w', encoding='utf-8') as f:
-        f.write(content)
-print("Dodano przycisk eksportu MDF4 w Snifferze.")
-PYTHON_EOF
-
-# ----------------------------------------------------------------------
-# 4. Edytor DBC w GUI
-# ----------------------------------------------------------------------
-echo "  -> Dodawanie podstawowego edytora DBC"
-
-cat >> controllers/sniffer/dbc_handler.py << 'EOF'
-
-    def open_dbc_editor(self):
-        """Otwiera okno edytora DBC."""
-        if not self.dbc_db:
-            messagebox.showinfo("Brak DBC", "Najpierw wczytaj plik DBC.")
-            return
-
-        win = tk.Toplevel(self.app.root)
-        win.title("Edytor DBC")
-        win.geometry("800x600")
-        win.transient(self.app.root)
-        win.grab_set()
-
-        tree = ttk.Treeview(win, columns=('message', 'signal', 'start', 'length'), show='headings')
-        tree.heading('message', text='ID (hex)')
-        tree.heading('signal', text='Sygnał')
-        tree.heading('start', text='Start bit')
-        tree.heading('length', text='Długość')
-
-        for msg in self.dbc_db.messages:
-            for sig in msg.signals:
-                tree.insert('', tk.END, values=(
-                    f"0x{msg.frame_id:08X}",
-                    sig.name,
-                    sig.start,
-                    sig.length
-                ))
-
-        tree.pack(fill=tk.BOTH, expand=True)
-        ttk.Button(win, text="Zapisz jako...", command=lambda: self.save_dbc_as()).pack(pady=10)
-
-    def save_dbc_as(self):
-        """Zapisuje aktualną bazę DBC do nowego pliku."""
-        from tkinter import filedialog
-        import cantools
-
-        filepath = filedialog.asksaveasfilename(defaultextension=".dbc", filetypes=[("Pliki DBC", "*.dbc")])
-        if not filepath:
-            return
-        try:
-            cantools.database.dump_file(self.dbc_db, filepath)
-            self.log(f"[DBC] Zapisano do {filepath}")
-        except Exception as e:
-            messagebox.showerror("Błąd zapisu", str(e))
-EOF
-
-# Dodanie przycisku w sniffer_tab.py
-python3 << 'PYTHON_EOF'
-with open('gui/tabs/sniffer_tab.py', 'r', encoding='utf-8') as f:
-    content = f.read()
-
-if 'text="Edytor DBC"' not in content:
-    content = content.replace(
-        'dbc_load_btn = ttk.Button(toolbar, text="Wczytaj DBC", command=app.sniffer_ctrl.load_dbc_file)',
-        'dbc_load_btn = ttk.Button(toolbar, text="Wczytaj DBC", command=app.sniffer_ctrl.load_dbc_file)\n    dbc_edit_btn = ttk.Button(toolbar, text="Edytor DBC", command=app.sniffer_ctrl.open_dbc_editor)\n    dbc_edit_btn.pack(side=tk.LEFT, padx=2)'
-    )
-    with open('gui/tabs/sniffer_tab.py', 'w', encoding='utf-8') as f:
-        f.write(content)
-print("Dodano przycisk Edytor DBC.")
-PYTHON_EOF
-
-# ----------------------------------------------------------------------
-# 5. Sprawdzenie składni
-# ----------------------------------------------------------------------
-echo "  -> Sprawdzanie składni..."
-python3 -m py_compile controllers/sniffer/export.py
-python3 -m py_compile controllers/sniffer/dbc_handler.py
-python3 -m py_compile gui/tabs/sniffer_tab.py
-
-echo "==> Etap C zakończony!"
-echo "Nowe funkcje:"
-echo "  - Eksport do Parquet (przycisk w Snifferze)"
-echo "  - Eksport do MDF4 (przycisk w Snifferze)"
-echo "  - Podstawowy edytor DBC (przycisk 'Edytor DBC')"
+echo "Poprawki zastosowane pomyślnie."
+echo ""
+echo "Zmiany:"
+echo "  - 'forecast_frame' zastąpione przez 'frame' w konfiguracjach grid"
+echo "  - Canvas w setup_forecast_tab przeniesiony do wiersza 5"
+echo "  - Dodano odpowiednie grid_rowconfigure"
+echo ""
+echo "Możesz teraz uruchomić program: sudo ./run.sh"

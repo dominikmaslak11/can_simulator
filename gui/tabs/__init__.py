@@ -12,3 +12,4 @@ from . import pattern_tab
 from . import server_tab
 from . import generator_tab
 from . import macro_tab
+from . import advanced_ml_tab
