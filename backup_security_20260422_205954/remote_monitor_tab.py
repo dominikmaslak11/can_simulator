@@ -33,10 +33,6 @@ class RemoteMonitorTab:
         
         self.incoming_filter_var = tk.StringVar()
 
-        
-        self.allowed_ids_var = tk.StringVar()
-        self.log_to_file_var = tk.BooleanVar(value=False)
-
         self._create_widgets()
         self._setup_queue()
         self._setup_logging()
@@ -199,20 +195,7 @@ class RemoteMonitorTab:
             except ValueError:
                 messagebox.showerror("Błąd", "Nieprawidłowy format filtru ID.")
                 return
-                # Parsuj dozwolone ID
-        allowed_str = self.allowed_ids_var.get().strip()
-        allowed_ids = None
-        if allowed_str:
-            try:
-                allowed_ids = [int(x.strip(), 16) if x.strip().startswith('0x') else int(x.strip())
-                               for x in allowed_str.split(',') if x.strip()]
-            except ValueError:
-                messagebox.showerror("Błąd", "Nieprawidłowy format listy dozwolonych ID.")
-                return
         self.server = CANWebSocketServer(port=port, token=token, ssl_context=ssl_ctx)
-        self.server.allowed_client_ids = allowed_ids
-        self.server.log_to_file = self.log_to_file_var.get()
-        self.server.can_interface = self.app.can
         self.server.incoming_filter_ids = incoming_filter
         # Przekaż referencję do interfejsu CAN
         self.server.can_interface = self.app.can

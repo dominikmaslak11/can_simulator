@@ -1,30 +1,35 @@
-============================= test session starts ==============================
-platform linux -- Python 3.13.12, pytest-9.0.2, pluggy-1.6.0
-rootdir: /run/media/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator
-configfile: pytest.ini
-plugins: anyio-4.12.1, typeguard-4.4.4
-collected 36 items / 1 error
+┌──(venv)─(nz2xzhkzfeewkgbu㉿y5enjsya4t4pv4fn)-[/run/…/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator]
+└─$ sudo ./run.sh
+2026-04-22 21:00:18,350 [INFO] CANSimulator - === CAN Simulator GUI ===
+2026-04-22 21:00:18,350 [INFO] CANSimulator - Czas: 2026-04-22 21:00:18.350959, Python: 3.13.12 (main, Feb  4 2026, 15:06:39) [GCC 15.2.0]
+2026-04-22 21:00:18,918 [INFO] numexpr.utils - NumExpr defaulting to 12 threads.
+2026-04-22 21:00:19,676 [DEBUG] matplotlib - matplotlib data path: /run/media/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator/venv/lib/python3.13/site-packages/matplotlib/mpl-data
+2026-04-22 21:00:19,679 [DEBUG] matplotlib - CONFIGDIR=/root/.config/matplotlib
+2026-04-22 21:00:19,681 [DEBUG] matplotlib - interactive is False
+2026-04-22 21:00:19,681 [DEBUG] matplotlib - platform is linux
+2026-04-22 21:00:19,692 [DEBUG] matplotlib - CACHEDIR=/root/.cache/matplotlib
+2026-04-22 21:00:19,701 [DEBUG] matplotlib.font_manager - Using fontManager instance from /root/.cache/matplotlib/fontlist-v390.json
+2026-04-22 21:00:19,843 [DEBUG] canmatrix.formats - ldf is not supported
+2026-04-22 21:00:19,850 [DEBUG] canmatrix.formats - xls is not supported
+2026-04-22 21:00:19,851 [DEBUG] canmatrix.formats - xlsx is not supported
+2026-04-22 21:00:19,851 [DEBUG] canmatrix.formats - yaml is not supported
+2026-04-22 21:00:19,852 [DEBUG] canmatrix.formats - eds is not supported
+2026-04-22 21:00:20,115 [CRITICAL] CANSimulator - Import error
+Traceback (most recent call last):
+  File "/run/media/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator/main.py", line 29, in <module>
+    from gui.app import CanSimulatorApp
+  File "/run/media/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator/gui/__init__.py", line 1, in <module>
+    from .app import CanSimulatorApp
+  File "/run/media/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator/gui/app.py", line 11, in <module>
+    from gui.tabs.remote_monitor_tab import setup_remote_monitor_tab
+  File "/run/media/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator/gui/tabs/remote_monitor_tab.py", line 10, in <module>
+    from broadcaster import CANWebSocketServer
+  File "/run/media/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator/broadcaster/__init__.py", line 5, in <module>
+    from .server import CANWebSocketServer
+  File "/run/media/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator/broadcaster/server.py", line 110
+    f.write(f"{datetime.now().isoformat()} {msg}
+            ^
+SyntaxError: unterminated f-string literal (detected at line 110)
 
-==================================== ERRORS ====================================
-__________________ ERROR collecting tests/test_dbc_manager.py __________________
-ImportError while importing test module '/run/media/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator/tests/test_dbc_manager.py'.
-Hint: make sure your test modules/packages have valid Python names.
-Traceback:
-/usr/lib/python3.13/importlib/__init__.py:88: in import_module
-    return _bootstrap._gcd_import(name[level:], package, level)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-tests/test_dbc_manager.py:5: in <module>
-    from dbc_manager import DBCManager
-dbc_manager.py:1: in <module>
-    import cantools
-E   ModuleNotFoundError: No module named 'cantools'
-=============================== warnings summary ===============================
-tests/test_integration.py:18
-  /run/media/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator/tests/test_integration.py:18: PytestUnknownMarkWarning: Unknown pytest.mark.integration - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
-    @pytest.mark.integration
-
--- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
-=========================== short test summary info ============================
-ERROR tests/test_dbc_manager.py
-!!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!
-========================= 1 warning, 1 error in 0.15s ==========================
+┌──(venv)─(nz2xzhkzfeewkgbu㉿y5enjsya4t4pv4fn)-[/run/…/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator]
+└─$

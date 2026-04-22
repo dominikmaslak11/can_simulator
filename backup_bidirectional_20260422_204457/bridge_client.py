@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """
 Mostek WebSocket -> wirtualny CAN (vcan0) z auto-reconnect i filtrowaniem ID.
-Dwukierunkowy: odbiera ramki z WebSocket -> vcan0 oraz wysyła ramki z vcan0 -> WebSocket.
 """
 
 import json
@@ -11,16 +10,13 @@ import time
 import subprocess
 import sys
 import argparse
-from typing import List, Optional
+from typing import List, Optional, Set
 
 import websocket
-
 try:
     import can
-    from can import ThreadSafeBus
 except ImportError:
     can = None
-    ThreadSafeBus = None
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
 logger = logging.getLogger("CAN-Bridge")
@@ -43,15 +39,12 @@ class VCanBridge:
         self.bus = None
         self.running = False
         self.reconnect_thread = None
-
-        self.sending_to_vcan = False   # flaga zapobiegająca pętli zwrotnej
-        self.tx_thread = None
-
         self._setup_vcan()
 
     def _setup_vcan(self):
         if can is None:
             raise RuntimeError("python-can not installed; bridge cannot run.")
+        """Tworzy wirtualny interfejs vcan0, jeśli nie istnieje."""
         try:
             subprocess.run(['ip', 'link', 'show', 'vcan0'], check=True, capture_output=True)
             logger.info("vcan0 już istnieje.")
@@ -60,9 +53,10 @@ class VCanBridge:
             subprocess.run(['sudo', 'ip', 'link', 'add', 'dev', 'vcan0', 'type', 'vcan'], check=True)
             subprocess.run(['sudo', 'ip', 'link', 'set', 'vcan0', 'up'], check=True)
             logger.info("vcan0 utworzony i włączony.")
-        self.bus = ThreadSafeBus(channel='vcan0', interface='socketcan')
+        self.bus = can.interface.Bus(channel='vcan0', interface='socketcan')
 
     def _should_forward(self, can_id: int) -> bool:
+        """Sprawdza, czy ramka o danym ID powinna być przekazana."""
         if self.filter_ids is None:
             return True
         return can_id in self.filter_ids
@@ -79,11 +73,9 @@ class VCanBridge:
             payload = bytes(data['data'])
             is_extended = data.get('is_extended', False)
             msg = can.Message(arbitration_id=can_id, data=payload, is_extended_id=is_extended)
-            self.sending_to_vcan = True
             self.bus.send(msg)
-            self.sending_to_vcan = False
             if self.status_callback:
-                self.status_callback(f"Odebrano z serwera: {msg}")
+                self.status_callback(f"Wysłano: {msg}")
         except Exception as e:
             logger.error(f"Błąd ramki: {e}")
 
@@ -103,12 +95,6 @@ class VCanBridge:
         logger.info("Połączono z serwerem.")
         if self.token:
             ws.send(self.token)
-        # Wyślij listę dozwolonych ID (jeśli ustawiono)
-        if self.filter_ids is not None:
-            allowed_msg = json.dumps({"allowed_ids": list(self.filter_ids)})
-            ws.send(allowed_msg)
-            logger.info(f"Wysłano listę dozwolonych ID: {self.filter_ids}")
-
         if self.status_callback:
             self.status_callback("Połączono")
 
@@ -134,7 +120,7 @@ class VCanBridge:
                 )
                 wst = threading.Thread(target=self.ws.run_forever, daemon=True)
                 wst.start()
-                break
+                break  # po udanym połączeniu wychodzimy z pętli
             except Exception as e:
                 logger.error(f"Błąd reconnect: {e}")
 
@@ -150,38 +136,8 @@ class VCanBridge:
         wst = threading.Thread(target=self.ws.run_forever, daemon=True)
         wst.start()
 
-        # Uruchom wątek nadawczy (vcan -> WebSocket)
-        self.tx_thread = threading.Thread(target=self._tx_loop, daemon=True)
-        self.tx_thread.start()
-
-    def _tx_loop(self):
-        """Wątek odbierający ramki z vcan0 i wysyłający je przez WebSocket."""
-        while self.running:
-            try:
-                msg = self.bus.recv(timeout=0.5)
-                if msg is None:
-                    continue
-                if self.sending_to_vcan:
-                    continue
-                if self.filter_ids and msg.arbitration_id not in self.filter_ids:
-                    continue
-                if self.ws and self.ws.sock and self.ws.sock.connected:
-                    frame = {
-                        "id": hex(msg.arbitration_id),
-                        "data": list(msg.data),
-                        "is_extended": msg.is_extended_id
-                    }
-                    self.ws.send(json.dumps(frame))
-                    if self.status_callback:
-                        self.status_callback(f"Wysłano do serwera: {msg}")
-            except Exception as e:
-                logger.error(f"Błąd w pętli TX: {e}")
-                time.sleep(0.1)
-
     def stop(self):
         self.running = False
-        if self.tx_thread:
-            self.tx_thread.join(timeout=1.0)
         if self.ws:
             self.ws.close()
         if self.bus:
@@ -201,10 +157,9 @@ def main():
     filter_ids = None
     if args.filter_ids:
         try:
-            filter_ids = [int(x.strip(), 16) if x.strip().startswith('0x') else int(x.strip())
-                          for x in args.filter_ids.split(',')]
+            filter_ids = [int(x.strip(), 16) if x.strip().startswith('0x') else int(x.strip()) for x in args.filter_ids.split(',')]
         except ValueError:
-            logger.error("Nieprawidłowy format listy ID.")
+            logger.error("Nieprawidłowy format listy ID. Użyj liczb dziesiętnych lub szesnastkowych z 0x.")
             sys.exit(1)
 
     bridge = VCanBridge(
