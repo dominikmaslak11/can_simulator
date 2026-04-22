@@ -1,0 +1,13 @@
+┌──(venv)─(nz2xzhkzfeewkgbu㉿y5enjsya4t4pv4fn)-[/run/…/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator]
+└─$ sudo ./update.sh
+[sudo] hasło użytkownika nz2xzhkzfeewkgbu:
+Plik: gui/tabs/advanced_ml_tab.py
+Kopia zapasowa: gui/tabs/advanced_ml_tab.py.backup_modernize1_20260422_102104
+./update.sh: linia 161: uwaga: dokument miejscowy w linii 26 ograniczony końcem pliku (oczekiwano `PYTHON_SCRIPT')
+  File "<stdin>", line 123
+    PYTHON_SCRIPT "$TARGET_FILE"
+                  ^^^^^^^^^^^^^^
+SyntaxError: invalid syntax
+
+┌──(venv)─(nz2xzhkzfeewkgbu㉿y5enjsya4t4pv4fn)-[/run/…/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator]
+└─$

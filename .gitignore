@@ -1,11 +1,34 @@
+# Pliki Pythona
 __pycache__/
-*.pyc
-*.pyo
-*.log
-*.backup_*
+*.py[cod]
+*.so
+.Python
+env/
 venv/
-.idea/
-.vscode/
-*.db
-*.sqlite3
+ENV/
+env.bak/
+venv.bak/
+
+# Kopie zapasowe i logi
+*.backup_*
+*.log
+*.tmp
+
+# Konfiguracja lokalna
 config.local.json
+*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Dane testowe (jeśli są duże)
+*.txt
+*.log
+*.csv
+!requirements.txt
+
+# System plików (na wypadek montowania)
+/run/
+/media/

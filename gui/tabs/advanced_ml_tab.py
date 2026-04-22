@@ -1,5 +1,5 @@
 import tkinter as tk
-from tkinter import ttk, filedialog, messagebox
+from tkinter import ttk, filedialog, messagebox, simpledialog
 import threading
 import numpy as np
 from collections import defaultdict
@@ -23,6 +23,45 @@ except ImportError:
 from parsers import load_frames_from_file
 from ml.advanced_models import SignalForecaster
 
+
+
+class ProgressDialog(tk.Toplevel):
+    """Okno dialogowe z paskiem postępu i przyciskiem Anuluj."""
+    def __init__(self, parent, title="Operacja w toku", maximum=100):
+        super().__init__(parent)
+        self.title(title)
+        self.transient(parent)
+        self.grab_set()
+        self.protocol("WM_DELETE_WINDOW", self.on_cancel)
+
+        self.cancel_event = threading.Event()
+
+        self.label = ttk.Label(self, text="Proszę czekać...")
+        self.label.pack(pady=10, padx=20)
+
+        self.progress = ttk.Progressbar(self, length=300, mode='determinate', maximum=maximum)
+        self.progress.pack(pady=5, padx=20)
+
+        self.cancel_btn = ttk.Button(self, text="Anuluj", command=self.on_cancel)
+        self.cancel_btn.pack(pady=10)
+
+        self.update_idletasks()
+        self.geometry(f"+{parent.winfo_rootx()+50}+{parent.winfo_rooty()+50}")
+
+    def on_cancel(self):
+        self.cancel_event.set()
+        self.label.config(text="Anulowanie...")
+        self.cancel_btn.config(state='disabled')
+
+    def update_progress(self, value, text=None):
+        if not self.cancel_event.is_set():
+            self.progress['value'] = value
+            if text:
+                self.label.config(text=text)
+            self.update_idletasks()
+
+    def close(self):
+        self.destroy()
 
 def setup_advanced_ml_tab(app, tab):
     if not MATPLOTLIB_AVAILABLE:
@@ -144,6 +183,7 @@ def browse_file(var):
         var.set(path)
 
 
+
 def run_forecast(app, file_path, id_str, byte_idx, steps):
     if not file_path:
         messagebox.showerror("Błąd", "Wybierz plik.")
@@ -154,21 +194,39 @@ def run_forecast(app, file_path, id_str, byte_idx, steps):
         messagebox.showerror("Błąd", "Nieprawidłowy format ID.")
         return
 
+    # Okno postępu
+    progress = ProgressDialog(app.root, "Trenowanie LSTM", maximum=100)
+    progress.update_progress(0, "Wczytywanie danych...")
+
     def task():
-        frames = load_frames_from_file(file_path)
-        values = []
-        for f in frames:
-            if f[0] == cid and len(f[1]) > byte_idx:
-                values.append(f[1][byte_idx])
-        if len(values) < 30:
-            app.root.after(0, lambda: messagebox.showerror("Błąd", "Zbyt mało danych."))
-            return
-        app.forecaster.train(values)
-        forecast = app.forecaster.forecast(values, steps)
-        app.root.after(0, lambda: plot_forecast(app, values, forecast))
+        try:
+            frames = load_frames_from_file(file_path)
+            if progress.cancel_event.is_set():
+                return
+            progress.update_progress(20, "Przetwarzanie sygnału...")
+            values = []
+            for f in frames:
+                if f[0] == cid and len(f[1]) > byte_idx:
+                    values.append(f[1][byte_idx])
+            if len(values) < 30:
+                app.root.after(0, lambda: messagebox.showerror("Błąd", "Zbyt mało danych."))
+                progress.close()
+                return
+            progress.update_progress(40, "Trenowanie modelu LSTM...")
+            # Zakładamy, że train() nie ma callbacka – pomijamy na razie
+            app.forecaster.train(values)
+            if progress.cancel_event.is_set():
+                return
+            progress.update_progress(80, "Generowanie prognozy...")
+            forecast = app.forecaster.forecast(values, steps)
+            if progress.cancel_event.is_set():
+                return
+            progress.update_progress(100, "Zakończono")
+            app.root.after(0, lambda: plot_forecast(app, values, forecast))
+        finally:
+            app.root.after(0, progress.close)
 
     threading.Thread(target=task, daemon=True).start()
-
 
 def plot_forecast(app, history, forecast):
     ax = app.forecast_ax
