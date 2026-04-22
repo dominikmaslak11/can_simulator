@@ -32,3 +32,4 @@ config.local.json
 # System plików (na wypadek montowania)
 /run/
 /media/
+broadcaster/*.log
