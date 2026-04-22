@@ -37,11 +37,6 @@ class RemoteMonitorTab:
         self.allowed_ids_var = tk.StringVar()
         self.log_to_file_var = tk.BooleanVar(value=False)
 
-        
-        self.telegram_token_var = tk.StringVar()
-        self.telegram_chat_id_var = tk.StringVar()
-        self.enable_telegram_var = tk.BooleanVar(value=False)
-
         self._create_widgets()
         self._setup_queue()
         self._setup_logging()
@@ -214,19 +209,7 @@ class RemoteMonitorTab:
             except ValueError:
                 messagebox.showerror("Błąd", "Nieprawidłowy format listy dozwolonych ID.")
                 return
-                self.server = CANWebSocketServer(port=port, token=token, ssl_context=ssl_ctx)
-        self.server.allowed_client_ids = allowed_ids
-        self.server.log_to_file = self.log_to_file_var.get()
-        self.server.can_interface = self.app.can
-        self.server.incoming_filter_ids = incoming_filter
-        # Telegram
-        if self.enable_telegram_var.get():
-            self.server.telegram_token = self.telegram_token_var.get().strip()
-            self.server.telegram_chat_id = self.telegram_chat_id_var.get().strip()
-        else:
-            self.server.telegram_token = None
-            self.server.telegram_chat_id = None
-
+        self.server = CANWebSocketServer(port=port, token=token, ssl_context=ssl_ctx)
         self.server.allowed_client_ids = allowed_ids
         self.server.log_to_file = self.log_to_file_var.get()
         self.server.can_interface = self.app.can

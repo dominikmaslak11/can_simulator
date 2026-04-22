@@ -78,6 +78,7 @@ class CanSimulatorApp:
         self.discovered_artifacts = {}
 
         self.theme_var = tk.StringVar(value="light")
+        self.remote_monitor_tab = None
         # Sidebar i kategorie
         self.sidebar = None
         self.category_frames = {}

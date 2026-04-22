@@ -9,8 +9,6 @@ import logging
 from datetime import datetime
 from typing import Set, Optional
 import ssl
-import urllib.request
-import urllib.parse
 
 import websockets
 from websockets.server import WebSocketServerProtocol
@@ -33,10 +31,6 @@ class CANWebSocketServer:
         self.incoming_filter_ids = None  # filtr ID dla ramek przychodzących
         self.log_to_file = False
         self.log_file_path = "remote_operations.log"
-
-        
-        self.telegram_token = None
-        self.telegram_chat_id = None
 
         self._running = False
 
@@ -107,7 +101,6 @@ class CANWebSocketServer:
                         self._log_to_file(f"RX from {websocket.remote_address}: {message}")
                 else:
                     logger.error(f"Błąd wysyłania na CAN: {msg}")
-            self._send_telegram(f"❌ Błąd wysyłania na CAN: {msg}")
             else:
                 logger.warning("CAN niepodłączony – ramka odrzucona.")
         except Exception as e:
@@ -128,27 +121,6 @@ class CANWebSocketServer:
                 f.write(f"{datetime.now().isoformat()} {msg}\n")
         except Exception as e:
             logger.error(f"Błąd zapisu do pliku logu: {e}")
-
-
-    def _send_telegram(self, message):
-        """Wysyła wiadomość do skonfigurowanego czatu Telegram."""
-        if not self.telegram_token or not self.telegram_chat_id:
-            return
-        try:
-            url = f"https://api.telegram.org/bot{self.telegram_token}/sendMessage"
-            data = urllib.parse.urlencode({
-                "chat_id": self.telegram_chat_id,
-                "text": f"🚗 CAN Simulator
-{message}",
-                "parse_mode": "HTML"
-            }).encode("utf-8")
-            req = urllib.request.Request(url, data=data)
-            with urllib.request.urlopen(req, timeout=5) as resp:
-                if resp.getcode() != 200:
-                    logger.warning(f"Telegram odpowiedział kodem {resp.getcode()}")
-        except Exception as e:
-            logger.error(f"Błąd wysyłania do Telegram: {e}")
-
 
     async def stop(self):
         if not self._running:
