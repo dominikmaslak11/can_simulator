@@ -1,6 +1,6 @@
 """
 Serwer WebSocket do przesyłania ramek CAN w czasie rzeczywistym.
-Obsługuje opcjonalny token autoryzacyjny.
+Obsługuje opcjonalny token autoryzacyjny, autoryzację ID, logowanie do pliku i powiadomienia Telegram.
 """
 
 import asyncio
@@ -27,18 +27,34 @@ class CANWebSocketServer:
         self._server = None
         self._clients: Set[WebSocketServerProtocol] = set()
 
-        self.can_interface = None  # do ustawienia z zewnątrz (przez GUI)
-
-        self.allowed_client_ids = None   # lista dozwolonych ID dla klientów (None = wszystkie)
-        self.incoming_filter_ids = None  # filtr ID dla ramek przychodzących
+        self.can_interface = None
+        self.allowed_client_ids = None
+        self.incoming_filter_ids = None
         self.log_to_file = False
         self.log_file_path = "remote_operations.log"
 
-        
         self.telegram_token = None
         self.telegram_chat_id = None
 
         self._running = False
+
+    def _send_telegram(self, message):
+        """Wysyła wiadomość do skonfigurowanego czatu Telegram."""
+        if not self.telegram_token or not self.telegram_chat_id:
+            return
+        try:
+            url = f"https://api.telegram.org/bot{self.telegram_token}/sendMessage"
+            data = urllib.parse.urlencode({
+                "chat_id": self.telegram_chat_id,
+                "text": f"🚗 CAN Simulator\n{message}",
+                "parse_mode": "HTML"
+            }).encode("utf-8")
+            req = urllib.request.Request(url, data=data)
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                if resp.getcode() != 200:
+                    logger.warning(f"Telegram odpowiedział kodem {resp.getcode()}")
+        except Exception as e:
+            logger.error(f"Błąd wysyłania do Telegram: {e}")
 
     async def _handler(self, websocket: WebSocketServerProtocol):
         logger.info(f"Nowy klient: {websocket.remote_address}")
@@ -76,6 +92,7 @@ class CANWebSocketServer:
 
         self._clients.add(websocket)
         logger.info(f"Klient dodany, łącznie: {len(self._clients)}")
+        self._send_telegram(f"🟢 Klient połączony: {websocket.remote_address}")
 
         try:
             async for message in websocket:
@@ -85,9 +102,9 @@ class CANWebSocketServer:
         finally:
             self._clients.remove(websocket)
             logger.info(f"Klient rozłączony, pozostało: {len(self._clients)}")
+            self._send_telegram(f"🔴 Klient rozłączony: {websocket.remote_address}")
 
     async def _handle_incoming_frame(self, websocket, message):
-        """Przetwarza ramkę otrzymaną od klienta i wysyła na CAN."""
         if not self.incoming_filter_ids:
             logger.debug("Brak filtru przychodzącego – ramka odrzucona.")
             return
@@ -107,7 +124,7 @@ class CANWebSocketServer:
                         self._log_to_file(f"RX from {websocket.remote_address}: {message}")
                 else:
                     logger.error(f"Błąd wysyłania na CAN: {msg}")
-            self._send_telegram(f"❌ Błąd wysyłania na CAN: {msg}")
+                    self._send_telegram(f"❌ Błąd wysyłania na CAN: {msg}")
             else:
                 logger.warning("CAN niepodłączony – ramka odrzucona.")
         except Exception as e:
@@ -128,27 +145,6 @@ class CANWebSocketServer:
                 f.write(f"{datetime.now().isoformat()} {msg}\n")
         except Exception as e:
             logger.error(f"Błąd zapisu do pliku logu: {e}")
-
-
-    def _send_telegram(self, message):
-        """Wysyła wiadomość do skonfigurowanego czatu Telegram."""
-        if not self.telegram_token or not self.telegram_chat_id:
-            return
-        try:
-            url = f"https://api.telegram.org/bot{self.telegram_token}/sendMessage"
-            data = urllib.parse.urlencode({
-                "chat_id": self.telegram_chat_id,
-                "text": f"🚗 CAN Simulator
-{message}",
-                "parse_mode": "HTML"
-            }).encode("utf-8")
-            req = urllib.request.Request(url, data=data)
-            with urllib.request.urlopen(req, timeout=5) as resp:
-                if resp.getcode() != 200:
-                    logger.warning(f"Telegram odpowiedział kodem {resp.getcode()}")
-        except Exception as e:
-            logger.error(f"Błąd wysyłania do Telegram: {e}")
-
 
     async def stop(self):
         if not self._running:

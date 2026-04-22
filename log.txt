@@ -1,20 +1,20 @@
 ┌──(venv)─(nz2xzhkzfeewkgbu㉿y5enjsya4t4pv4fn)-[/run/…/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator]
 └─$ sudo ./run.sh
-2026-04-22 21:00:18,350 [INFO] CANSimulator - === CAN Simulator GUI ===
-2026-04-22 21:00:18,350 [INFO] CANSimulator - Czas: 2026-04-22 21:00:18.350959, Python: 3.13.12 (main, Feb  4 2026, 15:06:39) [GCC 15.2.0]
-2026-04-22 21:00:18,918 [INFO] numexpr.utils - NumExpr defaulting to 12 threads.
-2026-04-22 21:00:19,676 [DEBUG] matplotlib - matplotlib data path: /run/media/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator/venv/lib/python3.13/site-packages/matplotlib/mpl-data
-2026-04-22 21:00:19,679 [DEBUG] matplotlib - CONFIGDIR=/root/.config/matplotlib
-2026-04-22 21:00:19,681 [DEBUG] matplotlib - interactive is False
-2026-04-22 21:00:19,681 [DEBUG] matplotlib - platform is linux
-2026-04-22 21:00:19,692 [DEBUG] matplotlib - CACHEDIR=/root/.cache/matplotlib
-2026-04-22 21:00:19,701 [DEBUG] matplotlib.font_manager - Using fontManager instance from /root/.cache/matplotlib/fontlist-v390.json
-2026-04-22 21:00:19,843 [DEBUG] canmatrix.formats - ldf is not supported
-2026-04-22 21:00:19,850 [DEBUG] canmatrix.formats - xls is not supported
-2026-04-22 21:00:19,851 [DEBUG] canmatrix.formats - xlsx is not supported
-2026-04-22 21:00:19,851 [DEBUG] canmatrix.formats - yaml is not supported
-2026-04-22 21:00:19,852 [DEBUG] canmatrix.formats - eds is not supported
-2026-04-22 21:00:20,115 [CRITICAL] CANSimulator - Import error
+2026-04-22 21:15:06,806 [INFO] CANSimulator - === CAN Simulator GUI ===
+2026-04-22 21:15:06,806 [INFO] CANSimulator - Czas: 2026-04-22 21:15:06.806815, Python: 3.13.12 (main, Feb  4 2026, 15:06:39) [GCC 15.2.0]
+2026-04-22 21:15:07,361 [INFO] numexpr.utils - NumExpr defaulting to 12 threads.
+2026-04-22 21:15:08,123 [DEBUG] matplotlib - matplotlib data path: /run/media/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator/venv/lib/python3.13/site-packages/matplotlib/mpl-data
+2026-04-22 21:15:08,125 [DEBUG] matplotlib - CONFIGDIR=/root/.config/matplotlib
+2026-04-22 21:15:08,127 [DEBUG] matplotlib - interactive is False
+2026-04-22 21:15:08,127 [DEBUG] matplotlib - platform is linux
+2026-04-22 21:15:08,138 [DEBUG] matplotlib - CACHEDIR=/root/.cache/matplotlib
+2026-04-22 21:15:08,145 [DEBUG] matplotlib.font_manager - Using fontManager instance from /root/.cache/matplotlib/fontlist-v390.json
+2026-04-22 21:15:08,290 [DEBUG] canmatrix.formats - ldf is not supported
+2026-04-22 21:15:08,298 [DEBUG] canmatrix.formats - xls is not supported
+2026-04-22 21:15:08,298 [DEBUG] canmatrix.formats - xlsx is not supported
+2026-04-22 21:15:08,298 [DEBUG] canmatrix.formats - yaml is not supported
+2026-04-22 21:15:08,299 [DEBUG] canmatrix.formats - eds is not supported
+2026-04-22 21:15:08,573 [CRITICAL] CANSimulator - Import error
 Traceback (most recent call last):
   File "/run/media/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator/main.py", line 29, in <module>
     from gui.app import CanSimulatorApp
@@ -26,10 +26,9 @@ Traceback (most recent call last):
     from broadcaster import CANWebSocketServer
   File "/run/media/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator/broadcaster/__init__.py", line 5, in <module>
     from .server import CANWebSocketServer
-  File "/run/media/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator/broadcaster/server.py", line 110
-    f.write(f"{datetime.now().isoformat()} {msg}
-            ^
-SyntaxError: unterminated f-string literal (detected at line 110)
+  File "/run/media/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator/broadcaster/server.py", line 111
+    else:
+    ^^^^
+SyntaxError: invalid syntax
 
 ┌──(venv)─(nz2xzhkzfeewkgbu㉿y5enjsya4t4pv4fn)-[/run/…/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator]
-└─$
