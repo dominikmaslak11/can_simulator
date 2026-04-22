@@ -1,24 +1,30 @@
-──(nz2xzhkzfeewkgbu㉿y5enjsya4t4pv4fn)-[/run/…/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator]
-└─$ sudo ./run.sh
-2026-04-22 19:59:37,107 [INFO] CANSimulator - === CAN Simulator GUI ===
-2026-04-22 19:59:37,107 [INFO] CANSimulator - Czas: 2026-04-22 19:59:37.107680, Python: 3.13.12 (main, Feb  4 2026, 15:06:39) [GCC 15.2.0]
-2026-04-22 19:59:37,653 [INFO] numexpr.utils - NumExpr defaulting to 12 threads.
-2026-04-22 19:59:38,395 [CRITICAL] CANSimulator - Import error
-Traceback (most recent call last):
-  File "/run/media/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator/main.py", line 29, in <module>
-    from gui.app import CanSimulatorApp
-  File "/run/media/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator/gui/__init__.py", line 1, in <module>
-    from .app import CanSimulatorApp
-  File "/run/media/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator/gui/app.py", line 9, in <module>
-    from threads import SimulationThread, BinarySearchThread
-  File "/run/media/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator/threads/__init__.py", line 2, in <module>
-    from .binary_search_thread import BinarySearchThread
-  File "/run/media/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator/threads/binary_search_thread.py", line 19, in <module>
-    from session_manager import SessionManager
-  File "/run/media/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator/session_manager.py", line 44
-    if hasattr(app, "current_category"):
-    ^^
-SyntaxError: invalid syntax
+============================= test session starts ==============================
+platform linux -- Python 3.13.12, pytest-9.0.2, pluggy-1.6.0
+rootdir: /run/media/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator
+configfile: pytest.ini
+plugins: anyio-4.12.1, typeguard-4.4.4
+collected 36 items / 1 error
 
-┌──(nz2xzhkzfeewkgbu㉿y5enjsya4t4pv4fn)-[/run/…/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator]
-└─$
+==================================== ERRORS ====================================
+__________________ ERROR collecting tests/test_dbc_manager.py __________________
+ImportError while importing test module '/run/media/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator/tests/test_dbc_manager.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib/python3.13/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_dbc_manager.py:5: in <module>
+    from dbc_manager import DBCManager
+dbc_manager.py:1: in <module>
+    import cantools
+E   ModuleNotFoundError: No module named 'cantools'
+=============================== warnings summary ===============================
+tests/test_integration.py:18
+  /run/media/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator/tests/test_integration.py:18: PytestUnknownMarkWarning: Unknown pytest.mark.integration - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.integration
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+ERROR tests/test_dbc_manager.py
+!!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!
+========================= 1 warning, 1 error in 0.15s ==========================

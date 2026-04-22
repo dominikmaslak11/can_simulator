@@ -16,7 +16,6 @@ def vcan_available():
         return False
 
 @pytest.mark.integration
-@pytest.mark.skip(reason="Wymaga działającego vcan0 – do poprawy")
 class TestVirtualCANIntegration:
     @pytest.fixture(autouse=True)
     def setup_vcan(self):

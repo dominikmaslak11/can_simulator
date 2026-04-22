@@ -13,10 +13,7 @@ import argparse
 from typing import List, Optional, Set
 
 import websocket
-try:
-    import can
-except ImportError:
-    can = None
+import can
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
 logger = logging.getLogger("CAN-Bridge")
@@ -42,8 +39,6 @@ class VCanBridge:
         self._setup_vcan()
 
     def _setup_vcan(self):
-        if can is None:
-            raise RuntimeError("python-can not installed; bridge cannot run.")
         """Tworzy wirtualny interfejs vcan0, jeśli nie istnieje."""
         try:
             subprocess.run(['ip', 'link', 'show', 'vcan0'], check=True, capture_output=True)

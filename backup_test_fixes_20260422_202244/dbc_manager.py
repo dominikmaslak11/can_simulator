@@ -36,6 +36,30 @@ class DBCManager:
             }
         except Exception:
             return None
+                "message_name": message.name,
+                "signals": decoded,
+                "limits": limits
+            }
+        except Exception:
+            return None
+                "message_name": message.name,
+                "signals": decoded,
+                "limits": limits
+            }
+        except Exception:
+            return None
+                "message_name": message.name,
+                "signals": decoded,
+                "limits": limits
+            }
+        except Exception:
+            return None
+                "message_name": message.name,
+                "signals": decoded
+            }
+        except Exception:
+            return None
+
     def get_available_signals(self) -> List[str]:
         if not self.db:
             return []
