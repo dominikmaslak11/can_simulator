@@ -20,23 +20,13 @@ class DBCManager:
             logger.error(f"Błąd wczytywania DBC: {e}")
             return False
 
-    def decode_frame(self, frame_id: int, data: bytes):
+    def decode_frame(self, frame_id: int, data: bytes) -> Optional[Dict[str, Any]]:
         if not self.db:
             return None
         try:
             message = self.db.get_message_by_frame_id(frame_id)
             decoded = message.decode(data)
-            # Zbierz granice dla każdego sygnału
-            limits = {}
-            for sig in message.signals:
-                limits[sig.name] = (sig.minimum, sig.maximum)
             return {
-                "message_name": message.name,
-                "signals": decoded,
-                "limits": limits
-            }
-        except Exception:
-            return None
                 "message_name": message.name,
                 "signals": decoded
             }
