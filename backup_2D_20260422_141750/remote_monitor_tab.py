@@ -1,11 +1,10 @@
 import tkinter as tk
-from tkinter import ttk, messagebox, filedialog
+from tkinter import ttk, messagebox
 import threading
 import asyncio
 import queue
 import logging
 import time
-import ssl
 
 from broadcaster import CANWebSocketServer
 
@@ -26,10 +25,6 @@ class RemoteMonitorTab:
         self.token_var = tk.StringVar()
         self.clients_var = tk.StringVar(value="0")
 
-        self.use_ssl = tk.BooleanVar(value=False)
-        self.cert_file = tk.StringVar()
-        self.key_file = tk.StringVar()
-
         self._create_widgets()
         self._setup_queue()
         self._setup_logging()
@@ -44,29 +39,8 @@ class RemoteMonitorTab:
         ttk.Label(frame, text="Token (opcjonalny):").grid(row=1, column=0, sticky=tk.W, padx=5, pady=2)
         ttk.Entry(frame, textvariable=self.token_var, width=30, show="*").grid(row=1, column=1, sticky=tk.W, padx=5)
 
-        self.ssl_check = ttk.Checkbutton(frame, text="Użyj WSS (bezpieczne połączenie)", variable=self.use_ssl, command=self._toggle_ssl)
-        self.ssl_check.grid(row=2, column=0, columnspan=2, sticky=tk.W, padx=5, pady=2)
-
-        ttk.Label(frame, text="Certyfikat (cert.pem):").grid(row=3, column=0, sticky=tk.W, padx=5, pady=2)
-        self.cert_entry = ttk.Entry(frame, textvariable=self.cert_file, width=40)
-        self.cert_entry.grid(row=3, column=1, sticky=tk.W, padx=5)
-        ttk.Button(frame, text="Przeglądaj", command=lambda: self._browse_file(self.cert_file, "PEM files", "*.pem")).grid(row=3, column=2, padx=5)
-
-        ttk.Label(frame, text="Klucz prywatny (key.pem):").grid(row=4, column=0, sticky=tk.W, padx=5, pady=2)
-        self.key_entry = ttk.Entry(frame, textvariable=self.key_file, width=40)
-        self.key_entry.grid(row=4, column=1, sticky=tk.W, padx=5)
-        ttk.Button(frame, text="Przeglądaj", command=lambda: self._browse_file(self.key_file, "PEM files", "*.pem")).grid(row=4, column=2, padx=5)
-
-        self.gen_btn = ttk.Button(frame, text="Generuj certyfikat testowy", command=self._generate_self_signed_cert)
-        self.gen_btn.grid(row=5, column=1, pady=5)
-
-        # Ukryj początkowo pola certyfikatów
-        self.cert_entry.grid_remove()
-        self.key_entry.grid_remove()
-        self.gen_btn.grid_remove()
-
         btn_frame = ttk.Frame(frame)
-        btn_frame.grid(row=6, column=0, columnspan=2, pady=10)
+        btn_frame.grid(row=2, column=0, columnspan=2, pady=10)
 
         self.start_btn = ttk.Button(btn_frame, text="Start serwera", command=self.start_server)
         self.start_btn.pack(side=tk.LEFT, padx=5)
@@ -90,38 +64,6 @@ class RemoteMonitorTab:
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
         self.simulate_btn = None
-
-    def _toggle_ssl(self):
-        if self.use_ssl.get():
-            self.cert_entry.grid()
-            self.key_entry.grid()
-            self.gen_btn.grid()
-        else:
-            self.cert_entry.grid_remove()
-            self.key_entry.grid_remove()
-            self.gen_btn.grid_remove()
-
-    def _browse_file(self, var, filetypes_desc, pattern):
-        path = filedialog.askopenfilename(filetypes=[(filetypes_desc, pattern), ("All files", "*.*")])
-        if path:
-            var.set(path)
-
-    def _generate_self_signed_cert(self):
-        from tkinter import simpledialog
-        days = simpledialog.askinteger("Certyfikat", "Ważność certyfikatu (dni):", initialvalue=365)
-        if not days:
-            return
-        import subprocess, os
-        cert_path = os.path.join(os.getcwd(), "cert.pem")
-        key_path = os.path.join(os.getcwd(), "key.pem")
-        cmd = f'openssl req -x509 -newkey rsa:4096 -keyout {key_path} -out {cert_path} -days {days} -nodes -subj "/CN=localhost"'
-        try:
-            subprocess.run(cmd, shell=True, check=True, capture_output=True)
-            self.cert_file.set(cert_path)
-            self.key_file.set(key_path)
-            messagebox.showinfo("Sukces", f"Certyfikat wygenerowany:\n{cert_path}\n{key_path}")
-        except Exception as e:
-            messagebox.showerror("Błąd", f"Nie udało się wygenerować certyfikatu:\n{e}")
 
     def _setup_queue(self):
         self.queue = queue.Queue()
@@ -172,17 +114,7 @@ class RemoteMonitorTab:
         port = self.port_var.get()
         token = self.token_var.get() or None
 
-        ssl_ctx = None
-        if self.use_ssl.get():
-            cert = self.cert_file.get()
-            key = self.key_file.get()
-            if not cert or not key:
-                messagebox.showerror("Błąd", "Wybierz pliki certyfikatu i klucza.")
-                return
-            ssl_ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-            ssl_ctx.load_cert_chain(cert, key)
-
-        self.server = CANWebSocketServer(port=port, token=token, ssl_context=ssl_ctx)
+        self.server = CANWebSocketServer(port=port, token=token)
 
         def run_asyncio():
             loop = asyncio.new_event_loop()

@@ -105,26 +105,6 @@ def setup_forecast_tab(app, frame):
     steps_var = tk.IntVar(value=50)
     ttk.Spinbox(frame, from_=10, to=500, textvariable=steps_var, width=5).grid(row=3, column=1, sticky=tk.W, padx=5)
 
-    ttk.Label(frame, text="lub sygnał z DBC:").grid(row=4, column=0, sticky=tk.W, padx=5)
-    forecast_signal_combo = ttk.Combobox(frame, state="readonly", width=40)
-    forecast_signal_combo.bind("<Button-1>", lambda e: forecast_signal_combo.configure(values=app.dbc_signals if hasattr(app, "dbc_signals") else []))
-
-    def on_signal_selected(event):
-        selected = forecast_signal_combo.get()
-        if not selected or not hasattr(app, 'dbc_manager'):
-            return
-        try:
-            msg_name, sig_name = selected.split('.')
-            db = app.dbc_manager.db
-            msg = db.get_message_by_name(msg_name)
-            id_var.set(hex(msg.frame_id))
-            sig = msg.get_signal_by_name(sig_name)
-            byte_var.set(sig.start // 8)
-        except:
-            pass
-    forecast_signal_combo.bind("<<ComboboxSelected>>", on_signal_selected)
-    forecast_signal_combo.grid(row=4, column=1, columnspan=2, sticky=tk.W, padx=5)
-
     ttk.Button(frame, text="Trenuj i prognozuj", command=lambda: run_forecast(app, file_var.get(), id_var.get(), byte_var.get(), steps_var.get())).grid(row=4, column=1, pady=10)
 
     fig = Figure(figsize=(8, 4))

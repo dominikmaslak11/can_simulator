@@ -77,7 +77,6 @@ class CanSimulatorApp:
         self.discovered_artifacts = {}
 
         self.theme_var = tk.StringVar(value="light")
-        self.dbc_signals = []
         self._create_widgets()
         self.bind_shortcuts()
         self.setup_detachable_tabs()

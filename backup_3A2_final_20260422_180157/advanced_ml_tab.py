@@ -107,7 +107,6 @@ def setup_forecast_tab(app, frame):
 
     ttk.Label(frame, text="lub sygnał z DBC:").grid(row=4, column=0, sticky=tk.W, padx=5)
     forecast_signal_combo = ttk.Combobox(frame, state="readonly", width=40)
-    forecast_signal_combo.bind("<Button-1>", lambda e: forecast_signal_combo.configure(values=app.dbc_signals if hasattr(app, "dbc_signals") else []))
 
     def on_signal_selected(event):
         selected = forecast_signal_combo.get()

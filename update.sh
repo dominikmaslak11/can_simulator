@@ -1,162 +1,130 @@
 #!/bin/bash
-
-# Etap 1 modernizacji: pasek postępu + anulowanie operacji
-# Wersja poprawiona
+# =============================================================================
+# Poprawka integracji DBC: odświeżanie list sygnałów w GUI
+# =============================================================================
 
 set -e
 
-TARGET_FILE="gui/tabs/advanced_ml_tab.py"
-if [ ! -f "$TARGET_FILE" ]; then
-    if [ -f "../$TARGET_FILE" ]; then
-        TARGET_FILE="../$TARGET_FILE"
-    elif [ -f "../../$TARGET_FILE" ]; then
-        TARGET_FILE="../../$TARGET_FILE"
-    else
-        echo "BŁĄD: Nie znaleziono $TARGET_FILE"
-        exit 1
-    fi
-fi
+# Kopie zapasowe
+BACKUP_DIR="backup_dbc_fix_$(date +%Y%m%d_%H%M%S)"
+mkdir -p "$BACKUP_DIR"
+cp gui/app.py gui/tabs/dbc_manager_tab.py gui/tabs/chart_tab.py gui/tabs/advanced_ml_tab.py "$BACKUP_DIR/"
+echo "Kopie zapasowe utworzone w: $BACKUP_DIR"
 
-echo "Plik: $TARGET_FILE"
-BACKUP="${TARGET_FILE}.backup_modernize1_$(date +%Y%m%d_%H%M%S)"
-cp "$TARGET_FILE" "$BACKUP"
-echo "Kopia zapasowa: $BACKUP"
-
-# Uruchamiamy Pythona z argumentem (ścieżką do pliku) i kodem z here-doc
-python3 - "$TARGET_FILE" <<'PYTHON_SCRIPT'
+# -----------------------------------------------------------------------------
+# 1. Dodanie self.dbc_signals w app.py
+# -----------------------------------------------------------------------------
+python3 - <<'EOF'
 import re
-import sys
-
-if len(sys.argv) < 2:
-    print("Brak ścieżki do pliku", file=sys.stderr)
-    sys.exit(1)
-
-target_file = sys.argv[1]
-
-with open(target_file, 'r', encoding='utf-8') as f:
+file = 'gui/app.py'
+with open(file, 'r', encoding='utf-8') as f:
     content = f.read()
 
-# 1. Importy: dodajemy simpledialog
-if 'from tkinter import simpledialog' not in content:
-    content = re.sub(
-        r'(import tkinter as tk\nfrom tkinter import ttk, filedialog, messagebox)',
-        r'\1, simpledialog',
-        content
-    )
+if 'self.dbc_signals' not in content:
+    pattern = r'(self\.theme_var = tk\.StringVar\(value="light"\)\n)'
+    replacement = r'\1        self.dbc_signals = []\n'
+    content = re.sub(pattern, replacement, content)
+    with open(file, 'w', encoding='utf-8') as f:
+        f.write(content)
+    print("app.py: dodano self.dbc_signals")
+else:
+    print("app.py: self.dbc_signals już istnieje")
+EOF
 
-# 2. Dodajemy klasę ProgressDialog wewnątrz modułu (przed funkcjami)
-progress_dialog_class = '''
-class ProgressDialog(tk.Toplevel):
-    """Okno dialogowe z paskiem postępu i przyciskiem Anuluj."""
-    def __init__(self, parent, title="Operacja w toku", maximum=100):
-        super().__init__(parent)
-        self.title(title)
-        self.transient(parent)
-        self.grab_set()
-        self.protocol("WM_DELETE_WINDOW", self.on_cancel)
+# -----------------------------------------------------------------------------
+# 2. dbc_manager_tab.py – zapisanie sygnałów do app.dbc_signals
+# -----------------------------------------------------------------------------
+python3 - <<'EOF'
+import re
+file = 'gui/tabs/dbc_manager_tab.py'
+with open(file, 'r', encoding='utf-8') as f:
+    content = f.read()
 
-        self.cancel_event = threading.Event()
+# Po pomyślnym wczytaniu DBC ustaw app.dbc_signals
+pattern = r'(if app\.dbc_manager\.load_dbc\(path\):\s*\n\s*status_var\.set.*?\n.*?app\.log.*?\n)'
+replacement = r'\1            update_signal_list()\n            app.dbc_signals = app.dbc_manager.get_available_signals()\n'
+content = re.sub(pattern, replacement, content, flags=re.DOTALL)
 
-        self.label = ttk.Label(self, text="Proszę czekać...")
-        self.label.pack(pady=10, padx=20)
+# Usuń niepotrzebne, stare próby odwołań
+content = re.sub(r'if hasattr\(app, "chart_tab"\).*?app\.chart_tab\.signal_combo\["values"\] = signals\n', '', content, flags=re.DOTALL)
+content = re.sub(r'if hasattr\(app, "forecast_signal_combo"\).*?app\.forecast_signal_combo\["values"\] = signals\n', '', content, flags=re.DOTALL)
 
-        self.progress = ttk.Progressbar(self, length=300, mode='determinate', maximum=maximum)
-        self.progress.pack(pady=5, padx=20)
-
-        self.cancel_btn = ttk.Button(self, text="Anuluj", command=self.on_cancel)
-        self.cancel_btn.pack(pady=10)
-
-        self.update_idletasks()
-        self.geometry(f"+{parent.winfo_rootx()+50}+{parent.winfo_rooty()+50}")
-
-    def on_cancel(self):
-        self.cancel_event.set()
-        self.label.config(text="Anulowanie...")
-        self.cancel_btn.config(state='disabled')
-
-    def update_progress(self, value, text=None):
-        if not self.cancel_event.is_set():
-            self.progress['value'] = value
-            if text:
-                self.label.config(text=text)
-            self.update_idletasks()
-
-    def close(self):
-        self.destroy()
-'''
-
-# Wstawiamy klasę przed pierwszą definicją funkcji
-if 'class ProgressDialog' not in content:
-    pattern = r'(def setup_advanced_ml_tab\()'
-    content = re.sub(pattern, progress_dialog_class + r'\n\1', content, count=1)
-
-# 3. Modyfikujemy run_forecast aby używał ProgressDialog
-#    Uwaga: uproszczona podmiana – zakładamy, że funkcja wygląda tak jak wcześniej.
-#    W razie potrzeby dostosujemy regex.
-old_forecast_pattern = r'(def run_forecast\(app, file_path, id_str, byte_idx, steps\):.*?)(?=\ndef (?!task))'
-new_forecast_func = r'''
-def run_forecast(app, file_path, id_str, byte_idx, steps):
-    if not file_path:
-        messagebox.showerror("Błąd", "Wybierz plik.")
-        return
-    try:
-        cid = int(id_str, 16)
-    except:
-        messagebox.showerror("Błąd", "Nieprawidłowy format ID.")
-        return
-
-    # Okno postępu
-    progress = ProgressDialog(app.root, "Trenowanie LSTM", maximum=100)
-    progress.update_progress(0, "Wczytywanie danych...")
-
-    def task():
-        try:
-            frames = load_frames_from_file(file_path)
-            if progress.cancel_event.is_set():
-                return
-            progress.update_progress(20, "Przetwarzanie sygnału...")
-            values = []
-            for f in frames:
-                if f[0] == cid and len(f[1]) > byte_idx:
-                    values.append(f[1][byte_idx])
-            if len(values) < 30:
-                app.root.after(0, lambda: messagebox.showerror("Błąd", "Zbyt mało danych."))
-                progress.close()
-                return
-            progress.update_progress(40, "Trenowanie modelu LSTM...")
-            # Zakładamy, że train() nie ma callbacka – pomijamy na razie
-            app.forecaster.train(values)
-            if progress.cancel_event.is_set():
-                return
-            progress.update_progress(80, "Generowanie prognozy...")
-            forecast = app.forecaster.forecast(values, steps)
-            if progress.cancel_event.is_set():
-                return
-            progress.update_progress(100, "Zakończono")
-            app.root.after(0, lambda: plot_forecast(app, values, forecast))
-        finally:
-            app.root.after(0, progress.close)
-
-    threading.Thread(target=task, daemon=True).start()
-'''
-
-content = re.sub(old_forecast_pattern, new_forecast_func, content, flags=re.DOTALL)
-
-# Zapisujemy zmiany
-with open(target_file, 'w', encoding='utf-8') as f:
+with open(file, 'w', encoding='utf-8') as f:
     f.write(content)
+print("dbc_manager_tab.py: ustawiono app.dbc_signals")
+EOF
 
-print("Zmiany w pliku zostały wprowadzone.")
-PYTHON_SCRIPT
+# -----------------------------------------------------------------------------
+# 3. chart_tab.py – dodanie comboboxa DBC
+# -----------------------------------------------------------------------------
+python3 - <<'EOF'
+import re
+file = 'gui/tabs/chart_tab.py'
+with open(file, 'r', encoding='utf-8') as f:
+    content = f.read()
 
-# Sprawdzamy status
-if [ $? -eq 0 ]; then
-    echo ""
-    echo "Etap 1 zakończony pomyślnie!"
-    echo "Dodano: ProgressDialog, obsługa anulowania dla prognozowania."
-    echo "Aby zobaczyć efekt, uruchom program i wybierz zakładkę 'Prognozowanie (LSTM)'."
-else
-    echo "Wystąpił błąd podczas modyfikacji. Przywracam kopię zapasową."
-    cp "$BACKUP" "$TARGET_FILE"
-    exit 1
-fi
+if 'lub sygnał z DBC' not in content:
+    # Wstawiamy nowy wiersz po refresh_btn
+    pattern = r'(refresh_btn\.grid\(row=0, column=4, padx=5, pady=2\)\n)'
+    replacement = (r'\1'
+                   r'    ttk.Label(control_frame, text="lub sygnał z DBC:").grid(row=1, column=0, sticky=tk.W, padx=5, pady=2)\n'
+                   r'    chart_signal_combo = ttk.Combobox(control_frame, state="readonly", width=40)\n'
+                   r'    chart_signal_combo.grid(row=1, column=1, columnspan=2, sticky=tk.W, padx=5, pady=2)\n'
+                   r'    chart_signal_combo.bind("<Button-1>", lambda e: chart_signal_combo.configure(values=app.dbc_signals if hasattr(app, "dbc_signals") else []))\n'
+                   r'    chart_signal_combo.bind("<<ComboboxSelected>>", lambda e: on_signal_selected(app, id_var, byte_var, chart_signal_combo))\n'
+                   r'    app.chart_signal_combo = chart_signal_combo\n'
+                   r'\n')
+    content = re.sub(pattern, replacement, content, flags=re.DOTALL)
+
+    # Dodaj funkcję on_signal_selected wewnątrz setup_chart_tab
+    func_def = '''
+    def on_signal_selected(app, id_var, byte_var, combo):
+        selected = combo.get()
+        if not selected or not hasattr(app, 'dbc_manager'):
+            return
+        try:
+            msg_name, sig_name = selected.split('.')
+            db = app.dbc_manager.db
+            msg = db.get_message_by_name(msg_name)
+            id_var.set(hex(msg.frame_id))
+            sig = msg.get_signal_by_name(sig_name)
+            byte_var.set(sig.start // 8)
+        except Exception:
+            pass
+'''
+    # Wstaw przed "Inicjalizacja listy ID"
+    content = re.sub(r'(\n    # Inicjalizacja listy ID\n)', func_def + r'\1', content, flags=re.DOTALL)
+
+with open(file, 'w', encoding='utf-8') as f:
+    f.write(content)
+print("chart_tab.py: dodano combobox DBC")
+EOF
+
+# -----------------------------------------------------------------------------
+# 4. advanced_ml_tab.py – combobox korzysta z app.dbc_signals
+# -----------------------------------------------------------------------------
+python3 - <<'EOF'
+import re
+file = 'gui/tabs/advanced_ml_tab.py'
+with open(file, 'r', encoding='utf-8') as f:
+    content = f.read()
+
+pattern = r'(forecast_signal_combo = ttk\.Combobox\(frame, state="readonly", width=40\)\n)'
+replacement = r'\1    forecast_signal_combo.bind("<Button-1>", lambda e: forecast_signal_combo.configure(values=app.dbc_signals if hasattr(app, "dbc_signals") else []))\n'
+content = re.sub(pattern, replacement, content)
+
+# Usuń stare próby wypełniania
+content = re.sub(r'if hasattr\(app, "dbc_manager".*?forecast_signal_combo\["values"\] = signals\n', '', content, flags=re.DOTALL)
+
+with open(file, 'w', encoding='utf-8') as f:
+    f.write(content)
+print("advanced_ml_tab.py: combobox DBC zaktualizowany")
+EOF
+
+echo ""
+echo "=== Wszystkie poprawki zostały wprowadzone ==="
+echo "Uruchom aplikację i przetestuj:"
+echo "1. Wczytaj plik DBC w zakładce 'DBC Manager'."
+echo "2. Sprawdź, czy lista sygnałów się wypełniła."
+echo "3. Przejdź do zakładki 'Wykresy' – kliknij combobox 'lub sygnał z DBC'."
+echo "4. W zakładce 'Zaawansowane ML → Prognozowanie' kliknij combobox sygnałów DBC."

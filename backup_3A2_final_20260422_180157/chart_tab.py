@@ -38,13 +38,6 @@ def setup_chart_tab(app, tab):
     refresh_btn = ttk.Button(control_frame, text="Odśwież listę ID",
                              command=lambda: refresh_id_list(app, id_combo))
     refresh_btn.grid(row=0, column=4, padx=5, pady=2)
-    ttk.Label(control_frame, text="lub sygnał z DBC:").grid(row=1, column=0, sticky=tk.W, padx=5, pady=2)
-    chart_signal_combo = ttk.Combobox(control_frame, state="readonly", width=40)
-    chart_signal_combo.grid(row=1, column=1, columnspan=2, sticky=tk.W, padx=5, pady=2)
-    chart_signal_combo.bind("<Button-1>", lambda e: chart_signal_combo.configure(values=app.dbc_signals if hasattr(app, "dbc_signals") else []))
-    chart_signal_combo.bind("<<ComboboxSelected>>", lambda e: on_signal_selected(app, id_var, byte_var, chart_signal_combo))
-    app.chart_signal_combo = chart_signal_combo
-
 
     draw_btn = ttk.Button(control_frame, text="Rysuj wykres",
                           command=lambda: draw_chart(app, id_var.get(), byte_var.get()))
@@ -93,20 +86,6 @@ def setup_chart_tab(app, tab):
     app.chart_byte_var = byte_var
     app.chart_data = {"timestamps": [], "values": [], "items": [], "id_str": "", "byte_index": 0}
     app.chart_span = None  # obiekt prostokąta zaznaczenia
-
-    def on_signal_selected(app, id_var, byte_var, combo):
-        selected = combo.get()
-        if not selected or not hasattr(app, 'dbc_manager'):
-            return
-        try:
-            msg_name, sig_name = selected.split('.')
-            db = app.dbc_manager.db
-            msg = db.get_message_by_name(msg_name)
-            id_var.set(hex(msg.frame_id))
-            sig = msg.get_signal_by_name(sig_name)
-            byte_var.set(sig.start // 8)
-        except Exception:
-            pass
 
     # Inicjalizacja listy ID
     refresh_id_list(app, id_combo)
