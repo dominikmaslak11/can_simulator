@@ -1,11 +1,41 @@
-┌──(venv)─(nz2xzhkzfeewkgbu㉿y5enjsya4t4pv4fn)-[/run/…/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator]
-└─$ sudo ./create_docker_env.sh
-=== Tworzenie konfiguracji Docker dla CAN Simulator ===
-Utworzono Dockerfile
-Utworzono docker-compose.yml
-Utworzono run_docker.sh
-./create_docker_env.sh: linia 120: uwaga: dokument miejscowy w linii 106 ograniczony końcem pliku (oczekiwano `EOF')
-./create_docker_env.sh: linia 121: błąd składni: niespodziewany koniec pliku z polecenia `if' w wierszu 105
+2026-04-22 19:51:30,646 [CRITICAL] CANSimulator - Nieobsłużony wyjątek
+Traceback (most recent call last):
+  File "/run/media/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator/main.py", line 36, in <module>
+    app = CanSimulatorApp(root)
+  File "/run/media/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator/gui/app.py", line 91, in __init__
+    self._create_widgets()
+    ~~~~~~~~~~~~~~~~~~~~^^
+  File "/run/media/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator/gui/app.py", line 174, in _create_widgets
+    setup_func(frame)
+    ~~~~~~~~~~^^^^^^^
+  File "/run/media/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator/gui/app.py", line 460, in _create_network_frame
+    setup_bridge_tab(self, tab_bridge)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+  File "/run/media/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator/gui/tabs/bridge_tab.py", line 151, in setup_bridge_tab
+    BridgeTab(parent, app)
+    ~~~~~~~~~^^^^^^^^^^^^^
+  File "/run/media/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator/gui/tabs/bridge_tab.py", line 27, in __init__
+    self.url_var.set(app.bridge_url)
+    ^^^^^^^^^^^^
+AttributeError: 'BridgeTab' object has no attribute 'url_var'
+Traceback (most recent call last):
+  File "/run/media/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator/main.py", line 36, in <module>
+    app = CanSimulatorApp(root)
+  File "/run/media/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator/gui/app.py", line 91, in __init__
+    self._create_widgets()
+    ~~~~~~~~~~~~~~~~~~~~^^
+  File "/run/media/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator/gui/app.py", line 174, in _create_widgets
+    setup_func(frame)
+    ~~~~~~~~~~^^^^^^^
+  File "/run/media/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator/gui/app.py", line 460, in _create_network_frame
+    setup_bridge_tab(self, tab_bridge)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+  File "/run/media/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator/gui/tabs/bridge_tab.py", line 151, in setup_bridge_tab
+    BridgeTab(parent, app)
+    ~~~~~~~~~^^^^^^^^^^^^^
+  File "/run/media/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator/gui/tabs/bridge_tab.py", line 27, in __init__
+    self.url_var.set(app.bridge_url)
+    ^^^^^^^^^^^^
+AttributeError: 'BridgeTab' object has no attribute 'url_var'
 
-┌──(venv)─(nz2xzhkzfeewkgbu㉿y5enjsya4t4pv4fn)-[/run/…/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator]
-└─$
+┌──(nz2xzhkzfeewkgbu㉿y5enjsya4t4pv4fn)-[/run/…/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator]

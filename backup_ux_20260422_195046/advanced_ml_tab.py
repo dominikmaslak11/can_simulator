@@ -316,15 +316,7 @@ def run_explorer(app, file_path, id1_str, byte1, id2_str, byte2):
         return
 
     def task():
-        
-        progress = app.show_progress("Wczytywanie pliku...", maximum=100)
-        progress.update()
-        def update_progress(current, total):
-            if total > 0:
-                progress['value'] = (current / total) * 100
-                progress.update()
-        frames = load_frames_from_file(file_path, progress_callback=update_progress)
-        app.hide_progress()
+        frames = load_frames_from_file(file_path)
         x_vals, y_vals = [], []
         for f in frames:
             if f[0] == cid1 and len(f[1]) > byte1:

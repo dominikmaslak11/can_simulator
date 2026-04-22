@@ -91,12 +91,6 @@ def setup_chart_tab(app, tab):
     app.chart_status = status_var
     app.chart_id_combo = id_combo
     app.chart_byte_var = byte_var
-
-    # Wczytaj zapisane ustawienia
-    if hasattr(app, 'chart_last_id'):
-        id_var.set(app.chart_last_id)
-    if hasattr(app, 'chart_last_byte'):
-        byte_var.set(app.chart_last_byte)
     app.chart_data = {"timestamps": [], "values": [], "items": [], "id_str": "", "byte_index": 0}
     app.chart_span = None  # obiekt prostokąta zaznaczenia
 
@@ -193,11 +187,6 @@ def draw_chart(app, id_str, byte_index):
     ax.set_ylabel(f"Wartość bajtu {byte_index}")
     ax.set_title(f"ID: {id_str} – bajt {byte_index}")
     ax.grid(True, linestyle='--', alpha=0.7)
-    
-    # Zapisz ostatnie ustawienia
-    app.chart_last_id = id_str
-    app.chart_last_byte = byte_index
-
     app.chart_canvas.draw()
     app.chart_status.set(f"Wykres dla ID {id_str}, bajt {byte_index} – {len(timestamps)} punktów.")
     app.chart_span = None

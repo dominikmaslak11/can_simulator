@@ -83,6 +83,11 @@ class CanSimulatorApp:
         self.category_frames = {}
         self.current_category = None
         self.dbc_signals = []
+        self.chart_last_byte = ""
+        self.chart_last_id = ""
+        self.bridge_filter = ""
+        self.bridge_token = ""
+        self.bridge_url = ""
         self._create_widgets()
         self.bind_shortcuts()
         # self.setup_detachable_tabs()  # wyłączone

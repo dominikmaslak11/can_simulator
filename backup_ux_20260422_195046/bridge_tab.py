@@ -21,17 +21,8 @@ class BridgeTab:
         self.status_queue = queue.Queue()
         self.running = False
 
-        
         self._create_widgets()
         self._process_queue()
-
-        # Wczytaj zapisane ustawienia
-        if hasattr(app, 'bridge_url'):
-            self.url_var.set(app.bridge_url)
-        if hasattr(app, 'bridge_token'):
-            self.token_var.set(app.bridge_token)
-        if hasattr(app, 'bridge_filter'):
-            self.filter_var.set(app.bridge_filter)
 
     def _create_widgets(self):
         frame = ttk.LabelFrame(self.parent, text="Mostek WebSocket → vcan0", padding=10)
@@ -118,12 +109,6 @@ class BridgeTab:
             status_callback=self._status_callback
         )
         self.bridge_thread = threading.Thread(target=self._run_bridge, daemon=True)
-        
-        # Zapisz ustawienia
-        app.bridge_url = self.url_var.get()
-        app.bridge_token = self.token_var.get()
-        app.bridge_filter = self.filter_var.get()
-
         self.bridge_thread.start()
 
         self.start_btn.config(state=tk.DISABLED)
