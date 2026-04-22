@@ -160,7 +160,8 @@ class CanSimulatorApp:
             ("Sieć i zdalny dostęp", self._create_network_frame),
             ("Makra", self._create_macro_frame),
             ("DBC Manager", self._create_dbc_frame),
-                    ]
+            ("Mostek vCAN", self._create_bridge_frame),
+        ]
 
         for idx, (cat_name, setup_func) in enumerate(categories):
             self.sidebar.insert(tk.END, cat_name)
@@ -450,11 +451,6 @@ class CanSimulatorApp:
         notebook.add(tab_generator, text="Generator ruchu")
         generator_tab.setup_generator_tab(self, tab_generator)
 
-        tab_bridge = ttk.Frame(notebook)
-        notebook.add(tab_bridge, text="Mostek vCAN")
-        setup_bridge_tab(self, tab_bridge)
-
-
     def _create_macro_frame(self, parent):
         tab_macro = ttk.Frame(parent)
         tab_macro.pack(fill=tk.BOTH, expand=True)
@@ -650,6 +646,8 @@ WIĘCEJ INFORMACJI:
         self.root.configure(bg='#2e2e2e')
         self.log_text.configure(bg='#1e1e1e', fg='#ffffff')
 
+    def _create_bridge_frame(self, parent):
+        setup_bridge_tab(self, parent)
 
 
     def _apply_light_theme(self):
