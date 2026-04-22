@@ -30,16 +30,17 @@ class RemoteMonitorTab:
         self.cert_file = tk.StringVar()
         self.key_file = tk.StringVar()
 
+        
         self.incoming_filter_var = tk.StringVar()
+
+        
         self.allowed_ids_var = tk.StringVar()
         self.log_to_file_var = tk.BooleanVar(value=False)
 
+        
         self.telegram_token_var = tk.StringVar()
         self.telegram_chat_id_var = tk.StringVar()
         self.enable_telegram_var = tk.BooleanVar(value=False)
-
-        self.enable_http_var = tk.BooleanVar(value=False)
-        self.http_port_var = tk.IntVar(value=8080)
 
         self._create_widgets()
         self._setup_queue()
@@ -71,36 +72,13 @@ class RemoteMonitorTab:
         self.gen_btn = ttk.Button(frame, text="Generuj certyfikat testowy", command=self._generate_self_signed_cert)
         self.gen_btn.grid(row=5, column=1, pady=5)
 
+        # Ukryj początkowo pola certyfikatów
         self.cert_entry.grid_remove()
         self.key_entry.grid_remove()
         self.gen_btn.grid_remove()
 
-        ttk.Label(frame, text="Filtr ID przychodzących (opcjonalnie):").grid(row=6, column=0, sticky=tk.W, padx=5, pady=2)
-        ttk.Entry(frame, textvariable=self.incoming_filter_var, width=40).grid(row=6, column=1, padx=5)
-        ttk.Label(frame, text="(lista oddzielona przecinkami, np. 0x123,0x456)").grid(row=7, column=1, sticky=tk.W, padx=5)
-
-        ttk.Label(frame, text="Dozwolone ID dla klientów:").grid(row=8, column=0, sticky=tk.W, padx=5, pady=2)
-        ttk.Entry(frame, textvariable=self.allowed_ids_var, width=40).grid(row=8, column=1, padx=5)
-        ttk.Label(frame, text="(lista oddzielona przecinkami, puste = wszystkie)").grid(row=9, column=1, sticky=tk.W, padx=5)
-
-        ttk.Checkbutton(frame, text="Zapisuj zdalne operacje do pliku", variable=self.log_to_file_var).grid(row=10, column=0, columnspan=2, sticky=tk.W, padx=5, pady=2)
-
-        ttk.Separator(frame, orient='horizontal').grid(row=11, column=0, columnspan=2, sticky='ew', pady=10)
-        ttk.Label(frame, text="Powiadomienia Telegram:", font=('TkDefaultFont', 10, 'bold')).grid(row=12, column=0, columnspan=2, sticky=tk.W, padx=5, pady=2)
-        ttk.Checkbutton(frame, text="Włącz powiadomienia Telegram", variable=self.enable_telegram_var).grid(row=13, column=0, columnspan=2, sticky=tk.W, padx=5, pady=2)
-        ttk.Label(frame, text="Bot Token:").grid(row=14, column=0, sticky=tk.W, padx=5, pady=2)
-        ttk.Entry(frame, textvariable=self.telegram_token_var, width=50).grid(row=14, column=1, padx=5)
-        ttk.Label(frame, text="Chat ID:").grid(row=15, column=0, sticky=tk.W, padx=5, pady=2)
-        ttk.Entry(frame, textvariable=self.telegram_chat_id_var, width=30).grid(row=15, column=1, padx=5)
-
-        ttk.Separator(frame, orient='horizontal').grid(row=16, column=0, columnspan=2, sticky='ew', pady=10)
-        ttk.Label(frame, text="Interfejs webowy:", font=('TkDefaultFont', 10, 'bold')).grid(row=17, column=0, columnspan=2, sticky=tk.W, padx=5, pady=2)
-        ttk.Checkbutton(frame, text="Uruchom interfejs webowy", variable=self.enable_http_var).grid(row=18, column=0, columnspan=2, sticky=tk.W, padx=5, pady=2)
-        ttk.Label(frame, text="Port HTTP:").grid(row=19, column=0, sticky=tk.W, padx=5, pady=2)
-        ttk.Entry(frame, textvariable=self.http_port_var, width=10).grid(row=19, column=1, sticky=tk.W, padx=5)
-
         btn_frame = ttk.Frame(frame)
-        btn_frame.grid(row=20, column=0, columnspan=2, pady=10)
+        btn_frame.grid(row=6, column=0, columnspan=2, pady=10)
 
         self.start_btn = ttk.Button(btn_frame, text="Start serwera", command=self.start_server)
         self.start_btn.pack(side=tk.LEFT, padx=5)
@@ -216,7 +194,7 @@ class RemoteMonitorTab:
             ssl_ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
             ssl_ctx.load_cert_chain(cert, key)
 
-        # Parsuj filtr ID przychodzących
+                # Parsuj filtr ID przychodzących
         filter_str = self.incoming_filter_var.get().strip()
         incoming_filter = None
         if filter_str:
@@ -226,8 +204,7 @@ class RemoteMonitorTab:
             except ValueError:
                 messagebox.showerror("Błąd", "Nieprawidłowy format filtru ID.")
                 return
-
-        # Parsuj dozwolone ID
+                # Parsuj dozwolone ID
         allowed_str = self.allowed_ids_var.get().strip()
         allowed_ids = None
         if allowed_str:
@@ -237,12 +214,12 @@ class RemoteMonitorTab:
             except ValueError:
                 messagebox.showerror("Błąd", "Nieprawidłowy format listy dozwolonych ID.")
                 return
-
-        self.server = CANWebSocketServer(port=port, token=token, ssl_context=ssl_ctx)
+                self.server = CANWebSocketServer(port=port, token=token, ssl_context=ssl_ctx)
         self.server.allowed_client_ids = allowed_ids
         self.server.log_to_file = self.log_to_file_var.get()
+        self.server.can_interface = self.app.can
         self.server.incoming_filter_ids = incoming_filter
-
+        # Telegram
         if self.enable_telegram_var.get():
             self.server.telegram_token = self.telegram_token_var.get().strip()
             self.server.telegram_chat_id = self.telegram_chat_id_var.get().strip()
@@ -250,8 +227,11 @@ class RemoteMonitorTab:
             self.server.telegram_token = None
             self.server.telegram_chat_id = None
 
-        self.server.enable_http = self.enable_http_var.get()
-        self.server.http_port = self.http_port_var.get()
+        self.server.allowed_client_ids = allowed_ids
+        self.server.log_to_file = self.log_to_file_var.get()
+        self.server.can_interface = self.app.can
+        self.server.incoming_filter_ids = incoming_filter
+        # Przekaż referencję do interfejsu CAN
         self.server.can_interface = self.app.can
 
         def run_asyncio():
@@ -284,7 +264,7 @@ class RemoteMonitorTab:
             await asyncio.sleep(1.0)
 
     def _hook_can_source(self):
-        possible_managers = ['can', 'can_manager', 'can_reader', 'can_sniffer', 'player']
+        possible_managers = ['can_manager', 'can_reader', 'can_sniffer', 'player']
         hooked = False
         for attr in possible_managers:
             if hasattr(self.app, attr):
@@ -347,6 +327,8 @@ class RemoteMonitorTab:
 
 
 def setup_remote_monitor_tab(app, parent_frame):
-    tab = RemoteMonitorTab(parent_frame, app)
-    app.remote_monitor_tab = tab
-    return tab
+    """
+    Konfiguruje zawartość zakładki zdalnego monitoringu.
+    Wywoływana z app.py z już utworzoną ramką.
+    """
+    RemoteMonitorTab(parent_frame, app)

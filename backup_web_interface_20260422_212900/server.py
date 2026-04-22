@@ -1,7 +1,6 @@
 """
 Serwer WebSocket do przesyłania ramek CAN w czasie rzeczywistym.
-Obsługuje opcjonalny token autoryzacyjny, autoryzację ID, logowanie do pliku,
-powiadomienia Telegram oraz interfejs webowy (dashboard).
+Obsługuje opcjonalny token autoryzacyjny, autoryzację ID, logowanie do pliku i powiadomienia Telegram.
 """
 
 import asyncio
@@ -12,25 +11,15 @@ from typing import Set, Optional
 import ssl
 import urllib.request
 import urllib.parse
-import os
 
 import websockets
 from websockets.server import WebSocketServerProtocol
-
-# aiohttp jest opcjonalne – jeśli nie ma, dashboard HTTP nie będzie dostępny
-try:
-    from aiohttp import web
-    AIOHTTP_AVAILABLE = True
-except ImportError:
-    AIOHTTP_AVAILABLE = False
-    web = None
 
 logger = logging.getLogger(__name__)
 
 
 class CANWebSocketServer:
-    def __init__(self, host: str = "0.0.0.0", port: int = 8765,
-                 token: Optional[str] = None, ssl_context: Optional[ssl.SSLContext] = None):
+    def __init__(self, host: str = "0.0.0.0", port: int = 8765, token: Optional[str] = None, ssl_context: Optional[ssl.SSLContext] = None):
         self.host = host
         self.port = port
         self.token = token
@@ -47,14 +36,10 @@ class CANWebSocketServer:
         self.telegram_token = None
         self.telegram_chat_id = None
 
-        self.enable_http = False
-        self.http_port = 8080
-        self.http_app = None
-        self.http_runner = None
-
         self._running = False
 
     def _send_telegram(self, message):
+        """Wysyła wiadomość do skonfigurowanego czatu Telegram."""
         if not self.telegram_token or not self.telegram_chat_id:
             return
         try:
@@ -74,6 +59,7 @@ class CANWebSocketServer:
     async def _handler(self, websocket: WebSocketServerProtocol):
         logger.info(f"Nowy klient: {websocket.remote_address}")
 
+        # Odbierz token (jeśli wymagany)
         if self.token:
             try:
                 msg = await asyncio.wait_for(websocket.recv(), timeout=5.0)
@@ -87,6 +73,7 @@ class CANWebSocketServer:
                 await websocket.close(1008, "Token timeout")
                 return
 
+        # Odbierz listę dozwolonych ID (wymagane, jeśli serwer ma ustawione allowed_client_ids)
         if self.allowed_client_ids is not None:
             try:
                 msg = await asyncio.wait_for(websocket.recv(), timeout=5.0)
@@ -143,15 +130,6 @@ class CANWebSocketServer:
         except Exception as e:
             logger.error(f"Błąd przetwarzania ramki od klienta: {e}")
 
-    def _create_http_app(self):
-        if not AIOHTTP_AVAILABLE:
-            return None
-        app = web.Application()
-        web_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'web_dashboard')
-        if os.path.isdir(web_dir):
-            app.router.add_static('/', web_dir, show_index=True)
-        return app
-
     async def start(self):
         if self._running:
             return
@@ -161,15 +139,12 @@ class CANWebSocketServer:
         )
         self._running = True
 
-        if self.enable_http:
-            self.http_app = self._create_http_app()
-            if self.http_app:
-                runner = web.AppRunner(self.http_app)
-                await runner.setup()
-                site = web.TCPSite(runner, self.host, self.http_port)
-                await site.start()
-                self.http_runner = runner
-                logger.info(f"Interfejs webowy dostępny na http://{self.host}:{self.http_port}")
+    def _log_to_file(self, msg):
+        try:
+            with open(self.log_file_path, 'a', encoding='utf-8') as f:
+                f.write(f"{datetime.now().isoformat()} {msg}\n")
+        except Exception as e:
+            logger.error(f"Błąd zapisu do pliku logu: {e}")
 
     async def stop(self):
         if not self._running:
@@ -180,20 +155,8 @@ class CANWebSocketServer:
         for client in list(self._clients):
             await client.close()
         self._clients.clear()
-
-        if self.http_runner:
-            await self.http_runner.cleanup()
-            self.http_runner = None
-
         self._running = False
         logger.info("Serwer zatrzymany")
-
-    def _log_to_file(self, msg):
-        try:
-            with open(self.log_file_path, 'a', encoding='utf-8') as f:
-                f.write(f"{datetime.now().isoformat()} {msg}\n")
-        except Exception as e:
-            logger.error(f"Błąd zapisu do pliku logu: {e}")
 
     def broadcast_frame(self, frame: dict):
         if not self._running or not self._clients:

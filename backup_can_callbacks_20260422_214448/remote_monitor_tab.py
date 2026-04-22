@@ -284,7 +284,7 @@ class RemoteMonitorTab:
             await asyncio.sleep(1.0)
 
     def _hook_can_source(self):
-        possible_managers = ['can', 'can_manager', 'can_reader', 'can_sniffer', 'player']
+        possible_managers = ['can_manager', 'can_reader', 'can_sniffer', 'player']
         hooked = False
         for attr in possible_managers:
             if hasattr(self.app, attr):

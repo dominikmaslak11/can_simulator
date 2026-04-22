@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CAN Simulator – Zdalny Dashboard</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>🚗 CAN Simulator Dashboard</h1>
+        <div class="status-bar">
+            <span id="connection-status">Rozłączony</span>
+            <span id="frame-count">Ramki: 0</span>
+        </div>
+        <div class="controls">
+            <label>Adres WebSocket:</label>
+            <input type="text" id="ws-url" value="ws://localhost:8765" placeholder="ws://localhost:8765">
+            <button id="connect-btn">Połącz</button>
+            <button id="clear-btn">Wyczyść</button>
+        </div>
+        <div class="main-panel">
+            <div class="table-container">
+                <h2>Ostatnie ramki CAN</h2>
+                <table id="frames-table">
+                    <thead>
+                        <tr>
+                            <th>Czas</th>
+                            <th>ID</th>
+                            <th>Dane (hex)</th>
+                            <th>Zdekodowane (DBC)</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+            <div class="chart-container">
+                <h2>Wykres sygnału</h2>
+                <div class="chart-controls">
+                    <label>ID:</label>
+                    <input type="text" id="chart-id" value="0x123" size="6">
+                    <label>Bajt:</label>
+                    <input type="number" id="chart-byte" value="0" min="0" max="7" size="2">
+                    <button id="chart-update">Rysuj</button>
+                </div>
+                <canvas id="signal-chart" width="600" height="250"></canvas>
+            </div>
+        </div>
+    </div>
+    <script src="dashboard.js"></script>
+</body>
+</html>

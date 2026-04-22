@@ -8,7 +8,6 @@ import logging
 from can_interface import CanInterface
 from threads import SimulationThread, BinarySearchThread
 from gui.tabs import replay_tab, missing_tab, error_tab, step_tab, manual_tab, binary_tab, wizard_tab, sniffer_tab, chart_tab, ml_analysis_tab, pattern_tab, server_tab, generator_tab, macro_tab, advanced_ml_tab
-from gui.tabs.anomaly_tab import setup_anomaly_tab
 from gui.tabs.remote_monitor_tab import setup_remote_monitor_tab
 from gui.tabs.dbc_manager_tab import setup_dbc_manager_tab
 from gui.tabs.bridge_tab import setup_bridge_tab
@@ -440,10 +439,6 @@ class CanSimulatorApp:
         tab_ml = ttk.Frame(notebook)
         notebook.add(tab_ml, text="Analiza ML")
         ml_analysis_tab.setup_ml_tab(self, tab_ml)
-
-        tab_anomaly = ttk.Frame(notebook)
-        notebook.add(tab_anomaly, text="Anomalie CAN")
-        setup_anomaly_tab(self, tab_anomaly)
 
     def _create_network_frame(self, parent):
         notebook = ttk.Notebook(parent)

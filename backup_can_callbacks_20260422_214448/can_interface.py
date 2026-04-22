@@ -31,15 +31,6 @@ class CanInterface:
             logger.error(f"Błąd połączenia: {e}")
             return False, f"Błąd: {e}"
 
-
-    def add_frame_callback(self, callback):
-        """Dodaje funkcję callback, która będzie wywoływana dla każdej odebranej ramki.
-        Callback powinien przyjmować jeden argument: słownik z polami 'id', 'data', 'is_extended', 'timestamp'.
-        """
-        if callback not in self.frame_callbacks:
-            self.frame_callbacks.append(callback)
-
-
     def disconnect(self):
         self.stop_receiving()
         if self.sock:
