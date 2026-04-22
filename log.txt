@@ -1,41 +1,24 @@
-2026-04-22 19:51:30,646 [CRITICAL] CANSimulator - Nieobsłużony wyjątek
+──(nz2xzhkzfeewkgbu㉿y5enjsya4t4pv4fn)-[/run/…/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator]
+└─$ sudo ./run.sh
+2026-04-22 19:59:37,107 [INFO] CANSimulator - === CAN Simulator GUI ===
+2026-04-22 19:59:37,107 [INFO] CANSimulator - Czas: 2026-04-22 19:59:37.107680, Python: 3.13.12 (main, Feb  4 2026, 15:06:39) [GCC 15.2.0]
+2026-04-22 19:59:37,653 [INFO] numexpr.utils - NumExpr defaulting to 12 threads.
+2026-04-22 19:59:38,395 [CRITICAL] CANSimulator - Import error
 Traceback (most recent call last):
-  File "/run/media/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator/main.py", line 36, in <module>
-    app = CanSimulatorApp(root)
-  File "/run/media/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator/gui/app.py", line 91, in __init__
-    self._create_widgets()
-    ~~~~~~~~~~~~~~~~~~~~^^
-  File "/run/media/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator/gui/app.py", line 174, in _create_widgets
-    setup_func(frame)
-    ~~~~~~~~~~^^^^^^^
-  File "/run/media/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator/gui/app.py", line 460, in _create_network_frame
-    setup_bridge_tab(self, tab_bridge)
-    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
-  File "/run/media/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator/gui/tabs/bridge_tab.py", line 151, in setup_bridge_tab
-    BridgeTab(parent, app)
-    ~~~~~~~~~^^^^^^^^^^^^^
-  File "/run/media/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator/gui/tabs/bridge_tab.py", line 27, in __init__
-    self.url_var.set(app.bridge_url)
-    ^^^^^^^^^^^^
-AttributeError: 'BridgeTab' object has no attribute 'url_var'
-Traceback (most recent call last):
-  File "/run/media/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator/main.py", line 36, in <module>
-    app = CanSimulatorApp(root)
-  File "/run/media/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator/gui/app.py", line 91, in __init__
-    self._create_widgets()
-    ~~~~~~~~~~~~~~~~~~~~^^
-  File "/run/media/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator/gui/app.py", line 174, in _create_widgets
-    setup_func(frame)
-    ~~~~~~~~~~^^^^^^^
-  File "/run/media/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator/gui/app.py", line 460, in _create_network_frame
-    setup_bridge_tab(self, tab_bridge)
-    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
-  File "/run/media/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator/gui/tabs/bridge_tab.py", line 151, in setup_bridge_tab
-    BridgeTab(parent, app)
-    ~~~~~~~~~^^^^^^^^^^^^^
-  File "/run/media/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator/gui/tabs/bridge_tab.py", line 27, in __init__
-    self.url_var.set(app.bridge_url)
-    ^^^^^^^^^^^^
-AttributeError: 'BridgeTab' object has no attribute 'url_var'
+  File "/run/media/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator/main.py", line 29, in <module>
+    from gui.app import CanSimulatorApp
+  File "/run/media/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator/gui/__init__.py", line 1, in <module>
+    from .app import CanSimulatorApp
+  File "/run/media/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator/gui/app.py", line 9, in <module>
+    from threads import SimulationThread, BinarySearchThread
+  File "/run/media/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator/threads/__init__.py", line 2, in <module>
+    from .binary_search_thread import BinarySearchThread
+  File "/run/media/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator/threads/binary_search_thread.py", line 19, in <module>
+    from session_manager import SessionManager
+  File "/run/media/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator/session_manager.py", line 44
+    if hasattr(app, "current_category"):
+    ^^
+SyntaxError: invalid syntax
 
 ┌──(nz2xzhkzfeewkgbu㉿y5enjsya4t4pv4fn)-[/run/…/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator]
+└─$

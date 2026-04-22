@@ -1,8 +1,7 @@
 {
   "version": "2.0",
-  "timestamp": "2026-04-22T18:33:04.174011",
+  "timestamp": "2026-04-22T20:06:16.236727",
   "can_interface": "can0",
-  "notebook_tab": 10,
   "files": {
     "replay": "",
     "binary": "",
@@ -11,7 +10,8 @@
     "anomaly_log": "",
     "test_log": "",
     "pattern_train": "",
-    "pattern_test": ""
+    "pattern_test": "",
+    "dbc_path": ""
   },
   "settings": {
     "replay_interval": 0.5,
@@ -37,11 +37,18 @@
     "sniffer_bit_view": false,
     "ml_threshold": 0.5,
     "server_port": 5555,
-    "generator_loop": false
+    "generator_loop": false,
+    "bridge_url": "",
+    "bridge_token": "",
+    "bridge_filter": "",
+    "chart_last_id": "",
+    "chart_last_byte": "",
+    "theme": "light"
   },
   "tables": {
     "missing_frames": [],
     "error_frames": [],
     "generator_frames": []
-  }
+  },
+  "current_category": "Połączenie CAN"
 }

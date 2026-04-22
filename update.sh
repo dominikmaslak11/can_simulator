@@ -1,45 +1,52 @@
 #!/bin/bash
-# Naprawia błąd AttributeError w bridge_tab.py
+# =============================================================================
+# Naprawa session_manager.py – usunięcie odwołania do notebooka
+# =============================================================================
 
 set -e
 
-FILE="gui/tabs/bridge_tab.py"
-BACKUP="${FILE}.backup_order_$(date +%Y%m%d_%H%M%S)"
+FILE="session_manager.py"
+BACKUP="${FILE}.backup_session_$(date +%Y%m%d_%H%M%S)"
 
 cp "$FILE" "$BACKUP"
 echo "Kopia zapasowa: $BACKUP"
 
 python3 - "$FILE" <<'EOF'
-import re, sys
+import re
+import sys
+
 file_path = sys.argv[1]
 with open(file_path, 'r', encoding='utf-8') as f:
     content = f.read()
 
-# Usuń błędnie umieszczony blok wczytywania
-content = re.sub(
-    r'(\n        # Wczytaj zapisane ustawienia.*?self\.filter_var\.set\(app\.bridge_filter\)\n)',
-    '',
-    content,
-    flags=re.DOTALL
-)
+# 1. Usuń linię z "notebook_tab"
+content = re.sub(r'[ \t]*"notebook_tab": app\.notebook\.index\(.*?\),?\n', '', content)
 
-# Wstaw poprawny blok po _process_queue()
-pattern = r'(self\._process_queue\(\)\n)'
-replacement = r'''\1
-        # Wczytaj zapisane ustawienia
-        if hasattr(app, 'bridge_url'):
-            self.url_var.set(app.bridge_url)
-        if hasattr(app, 'bridge_token'):
-            self.token_var.set(app.bridge_token)
-        if hasattr(app, 'bridge_filter'):
-            self.filter_var.set(app.bridge_filter)
+# 2. W _collect_state dodaj zapis current_category (jeśli istnieje)
+collect_pattern = r'(def _collect_state\(app\):.*?state = {.*?)\n(.*?return state)'
+if 'current_category' not in content:
+    new_line = '\n        if hasattr(app, "current_category"):\n            state["current_category"] = app.current_category\n'
+    content = re.sub(collect_pattern, r'\1' + new_line + r'\2', content, flags=re.DOTALL)
+
+# 3. W _restore_state dodaj odtworzenie kategorii
+restore_pattern = r'(def _restore_state\(app, state\):.*?)(if "theme" in state:)'
+restore_code = '''
+        if "current_category" in state:
+            cat = state["current_category"]
+            for i, name in enumerate(app.sidebar.get(0, tk.END)):
+                if name == cat:
+                    app.sidebar.selection_set(i)
+                    app._on_category_select()
+                    break
 '''
-content = re.sub(pattern, replacement, content, flags=re.DOTALL)
+content = re.sub(restore_pattern, r'\1' + restore_code + r'\n        \2', content, flags=re.DOTALL)
 
 with open(file_path, 'w', encoding='utf-8') as f:
     f.write(content)
 
-print("bridge_tab.py naprawiony.")
+print("session_manager.py został naprawiony.")
 EOF
 
-echo "Gotowe. Uruchom aplikację: sudo ./run.sh"
+echo ""
+echo "=== Gotowe ==="
+echo "Uruchom aplikację: sudo ./run.sh"

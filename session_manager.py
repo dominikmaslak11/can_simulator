@@ -1,5 +1,6 @@
 import json
 import os
+import tkinter as tk
 from datetime import datetime
 
 class SessionManager:
@@ -44,7 +45,6 @@ class SessionManager:
             "version": "2.0",
             "timestamp": datetime.now().isoformat(),
             "can_interface": app.entry_iface.get(),
-            "notebook_tab": app.notebook.index(app.notebook.select()),
             "files": {
                 "replay": getattr(app, 'replay_file_var', None) and app.replay_file_var.get(),
                 "binary": getattr(app, 'binary_file_var', None) and app.binary_file_var.get(),
@@ -54,6 +54,7 @@ class SessionManager:
                 "test_log": getattr(app, 'ml_test_var', None) and app.ml_test_var.get(),
                 "pattern_train": getattr(app, 'pattern_train_var', None) and app.pattern_train_var.get(),
                 "pattern_test": getattr(app, 'pattern_test_var', None) and app.pattern_test_var.get(),
+                "dbc_path": getattr(app, 'last_dbc_path', ""),
             },
             "settings": {
                 "replay_interval": getattr(app, 'replay_interval', None) and app.replay_interval.get(),
@@ -80,6 +81,12 @@ class SessionManager:
                 "ml_threshold": getattr(app, 'ml_threshold', None) and app.ml_threshold.get(),
                 "server_port": getattr(app, 'server_port', None) and app.server_port.get(),
                 "generator_loop": getattr(app, 'generator_loop', None) and app.generator_loop.get(),
+                "bridge_url": getattr(app, 'bridge_url', ""),
+                "bridge_token": getattr(app, 'bridge_token', ""),
+                "bridge_filter": getattr(app, 'bridge_filter', ""),
+                "chart_last_id": getattr(app, 'chart_last_id', ""),
+                "chart_last_byte": getattr(app, 'chart_last_byte', ""),
+                "theme": app.theme_var.get(),
             },
             "tables": {
                 "missing_frames": app.missing_ctrl.frames if hasattr(app, 'missing_ctrl') else [],
@@ -87,6 +94,10 @@ class SessionManager:
                 "generator_frames": getattr(app, 'generator_frames', [])
             }
         }
+        # Dodajemy wybraną kategorię, jeśli istnieje
+        if hasattr(app, "current_category") and app.current_category:
+            state["current_category"] = app.current_category
+
         return state
 
     @staticmethod
@@ -115,6 +126,8 @@ class SessionManager:
             app.pattern_train_var.set(files['pattern_train'])
         if files.get('pattern_test') and hasattr(app, 'pattern_test_var'):
             app.pattern_test_var.set(files['pattern_test'])
+        if files.get('dbc_path') and hasattr(app, 'last_dbc_path'):
+            app.last_dbc_path = files['dbc_path']
 
         # Ustawienia
         s = state.get('settings', {})
@@ -168,6 +181,20 @@ class SessionManager:
         if hasattr(app, 'generator_loop') and s.get('generator_loop') is not None:
             app.generator_loop.set(s['generator_loop'])
 
+        # Nowe ustawienia UX
+        if hasattr(app, 'bridge_url') and s.get('bridge_url'):
+            app.bridge_url = s['bridge_url']
+        if hasattr(app, 'bridge_token') and s.get('bridge_token'):
+            app.bridge_token = s['bridge_token']
+        if hasattr(app, 'bridge_filter') and s.get('bridge_filter'):
+            app.bridge_filter = s['bridge_filter']
+        if hasattr(app, 'chart_last_id') and s.get('chart_last_id'):
+            app.chart_last_id = s['chart_last_id']
+        if hasattr(app, 'chart_last_byte') and s.get('chart_last_byte'):
+            app.chart_last_byte = s['chart_last_byte']
+        if hasattr(app, 'theme_var') and s.get('theme'):
+            app.theme_var.set(s['theme'])
+
         # Tabele
         tables = state.get('tables', {})
         if 'missing_frames' in tables and hasattr(app, 'missing_ctrl'):
@@ -178,7 +205,6 @@ class SessionManager:
             app.error_ctrl._refresh_tree()
         if 'generator_frames' in tables and hasattr(app, 'generator_frames'):
             app.generator_frames = tables['generator_frames']
-            # odśwież drzewo
             if hasattr(app, 'generator_tree'):
                 app.generator_tree.delete(*app.generator_tree.get_children())
                 for f in app.generator_frames:
@@ -188,3 +214,12 @@ class SessionManager:
                     ))
                 if app.generator_frames:
                     app.generator_start_btn.config(state='normal')
+
+        # Odtworzenie wybranej kategorii w sidebarze
+        if "current_category" in state:
+            cat = state["current_category"]
+            for i, name in enumerate(app.sidebar.get(0, tk.END)):
+                if name == cat:
+                    app.sidebar.selection_set(i)
+                    app._on_category_select()
+                    break
