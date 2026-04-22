@@ -10,7 +10,6 @@ from threads import SimulationThread, BinarySearchThread
 from gui.tabs import replay_tab, missing_tab, error_tab, step_tab, manual_tab, binary_tab, wizard_tab, sniffer_tab, chart_tab, ml_analysis_tab, pattern_tab, server_tab, generator_tab, macro_tab, advanced_ml_tab
 from gui.tabs.remote_monitor_tab import setup_remote_monitor_tab
 from gui.tabs.dbc_manager_tab import setup_dbc_manager_tab
-from gui.tabs.bridge_tab import setup_bridge_tab
 from gui.utils import write_log_to_file
 from controllers import (
     CanController, ReplayController, MissingController, ErrorController,
@@ -160,7 +159,6 @@ class CanSimulatorApp:
             ("Sieć i zdalny dostęp", self._create_network_frame),
             ("Makra", self._create_macro_frame),
             ("DBC Manager", self._create_dbc_frame),
-            ("Mostek vCAN", self._create_bridge_frame),
         ]
 
         for idx, (cat_name, setup_func) in enumerate(categories):
@@ -645,10 +643,6 @@ WIĘCEJ INFORMACJI:
         style.configure('TNotebook.Tab', background='#3e3e3e', foreground='#ffffff')
         self.root.configure(bg='#2e2e2e')
         self.log_text.configure(bg='#1e1e1e', fg='#ffffff')
-
-    def _create_bridge_frame(self, parent):
-        setup_bridge_tab(self, parent)
-
 
     def _apply_light_theme(self):
         style = ttk.Style()

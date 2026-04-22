@@ -10,7 +10,6 @@ from threads import SimulationThread, BinarySearchThread
 from gui.tabs import replay_tab, missing_tab, error_tab, step_tab, manual_tab, binary_tab, wizard_tab, sniffer_tab, chart_tab, ml_analysis_tab, pattern_tab, server_tab, generator_tab, macro_tab, advanced_ml_tab
 from gui.tabs.remote_monitor_tab import setup_remote_monitor_tab
 from gui.tabs.dbc_manager_tab import setup_dbc_manager_tab
-from gui.tabs.bridge_tab import setup_bridge_tab
 from gui.utils import write_log_to_file
 from controllers import (
     CanController, ReplayController, MissingController, ErrorController,
@@ -78,14 +77,10 @@ class CanSimulatorApp:
         self.discovered_artifacts = {}
 
         self.theme_var = tk.StringVar(value="light")
-        # Sidebar i kategorie
-        self.sidebar = None
-        self.category_frames = {}
-        self.current_category = None
         self.dbc_signals = []
         self._create_widgets()
         self.bind_shortcuts()
-        # self.setup_detachable_tabs()  # wyłączone
+        self.setup_detachable_tabs()
         self.load_session()
         logger.info("Interfejs GUI utworzony")
 
@@ -137,44 +132,73 @@ class CanSimulatorApp:
         self.lbl_status.grid(row=0, column=3, padx=10)
 
         # Zakładki
-        # Sidebar i główny kontener
-        main_panel = ttk.PanedWindow(self.root, orient=tk.HORIZONTAL)
-        main_panel.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+        self.notebook = ttk.Notebook(self.root)
+        self.notebook.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
 
-        # Lewy panel – lista kategorii
-        self.sidebar = tk.Listbox(main_panel, width=25, exportselection=False)
-        self.sidebar.pack(side=tk.LEFT, fill=tk.Y)
-        main_panel.add(self.sidebar, weight=0)
+        self.tab_replay = ttk.Frame(self.notebook)
+        self.notebook.add(self.tab_replay, text="Odtwarzanie pliku")
+        replay_tab.setup_replay_tab(self, self.tab_replay)
 
-        # Prawy panel – kontener na zawartość kategorii
-        self.content_frame = ttk.Frame(main_panel)
-        self.content_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
-        main_panel.add(self.content_frame, weight=1)
+        self.tab_missing = ttk.Frame(self.notebook)
+        self.notebook.add(self.tab_missing, text="Symulacja modułu")
+        missing_tab.setup_missing_tab(self, self.tab_missing)
 
-        # Definicje kategorii i odpowiadających im funkcji setup
-        categories = [
-            ("Połączenie CAN", self._create_connection_frame),
-            ("Podstawowe narzędzia", self._create_basic_tools_frame),
-            ("Wyszukiwanie i analiza", self._create_search_frame),
-            ("Wizualizacja i ML", self._create_viz_ml_frame),
-            ("Sieć i zdalny dostęp", self._create_network_frame),
-            ("Makra", self._create_macro_frame),
-            ("DBC Manager", self._create_dbc_frame),
-            ("Mostek vCAN", self._create_bridge_frame),
-        ]
+        self.tab_error = ttk.Frame(self.notebook)
+        self.notebook.add(self.tab_error, text="Ramki błędu")
+        error_tab.setup_error_tab(self, self.tab_error)
 
-        for idx, (cat_name, setup_func) in enumerate(categories):
-            self.sidebar.insert(tk.END, cat_name)
-            frame = ttk.Frame(self.content_frame)
-            self.category_frames[cat_name] = frame
-            setup_func(frame)
+        self.tab_step = ttk.Frame(self.notebook)
+        self.notebook.add(self.tab_step, text="Tryb krokowy")
+        step_tab.setup_step_tab(self, self.tab_step)
 
-        self.sidebar.bind('<<ListboxSelect>>', self._on_category_select)
-        self.sidebar.selection_set(0)  # domyślnie pierwsza kategoria
-        self._on_category_select()     # pokaż pierwszą kategorię
+        self.tab_manual = ttk.Frame(self.notebook)
+        self.notebook.add(self.tab_manual, text="Wysyłanie ręczne")
+        manual_tab.setup_manual_tab(self, self.tab_manual)
 
+        self.tab_binary = ttk.Frame(self.notebook)
+        self.notebook.add(self.tab_binary, text="Wyszukiwanie binarne")
+        binary_tab.setup_binary_tab(self, self.tab_binary)
 
-        
+        self.tab_wizard = ttk.Frame(self.notebook)
+        self.notebook.add(self.tab_wizard, text="Kreator wyszukiwania")
+        wizard_tab.setup_wizard_tab(self, self.tab_wizard)
+
+        self.tab_sniffer = ttk.Frame(self.notebook)
+        self.notebook.add(self.tab_sniffer, text="Sniffer CAN")
+        sniffer_tab.setup_sniffer_tab(self, self.tab_sniffer)
+
+        self.tab_chart = ttk.Frame(self.notebook)
+        self.notebook.add(self.tab_chart, text="Wykresy")
+        chart_tab.setup_chart_tab(self, self.tab_chart)
+
+        self.tab_ml = ttk.Frame(self.notebook)
+        self.tab_pattern = ttk.Frame(self.notebook)
+        self.tab_server = ttk.Frame(self.notebook)
+        self.tab_generator = ttk.Frame(self.notebook)
+        self.tab_macro = ttk.Frame(self.notebook)
+        self.tab_advanced_ml = ttk.Frame(self.notebook)
+
+        self.tab_remote = ttk.Frame(self.notebook)
+        self.notebook.add(self.tab_remote, text="Zdalny monitoring")
+        setup_remote_monitor_tab(self, self.tab_remote)
+
+        self.tab_dbc = ttk.Frame(self.notebook)
+        self.notebook.add(self.tab_dbc, text="DBC Manager")
+        setup_dbc_manager_tab(self, self.tab_dbc)
+
+        self.notebook.add(self.tab_advanced_ml, text="Zaawansowane ML")
+        advanced_ml_tab.setup_advanced_ml_tab(self, self.tab_advanced_ml)
+        self.notebook.add(self.tab_macro, text="Makra")
+        macro_tab.setup_macro_tab(self, self.tab_macro)
+        self.notebook.add(self.tab_generator, text="Generator ruchu")
+        generator_tab.setup_generator_tab(self, self.tab_generator)
+        self.notebook.add(self.tab_server, text="Serwer TCP")
+        server_tab.setup_server_tab(self, self.tab_server)
+        self.notebook.add(self.tab_pattern, text="Analiza wzorców")
+        pattern_tab.setup_pattern_tab(self, self.tab_pattern)
+        self.notebook.add(self.tab_ml, text="Analiza ML")
+        ml_analysis_tab.setup_ml_tab(self, self.tab_ml)
+
         # Log
         frame_log = ttk.LabelFrame(self.root, text="Log", padding=5)
         frame_log.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
@@ -339,129 +363,6 @@ class CanSimulatorApp:
         canvas.create_text(x_mid, 0, text=str(mid), anchor='s', font=('Arial', 8, 'bold'), fill='red')
 
     
-    def _on_category_select(self, event=None):
-        selection = self.sidebar.curselection()
-        if not selection:
-            return
-        cat_name = self.sidebar.get(selection[0])
-        # Ukryj wszystkie ramki
-        for frame in self.category_frames.values():
-            frame.pack_forget()
-        # Pokaż wybraną
-        self.category_frames[cat_name].pack(fill=tk.BOTH, expand=True)
-        self.current_category = cat_name
-
-    def _create_connection_frame(self, parent):
-        # Połączenie CAN (tak jak było wcześniej w głównym oknie, ale bez notebooka)
-        frame_conn = ttk.LabelFrame(parent, text="Połączenie CAN", padding=5)
-        frame_conn.pack(fill=tk.X, padx=5, pady=5)
-
-        ttk.Label(frame_conn, text="Interfejs:").grid(row=0, column=0, sticky=tk.W)
-        self.entry_iface = ttk.Entry(frame_conn, width=15)
-        self.entry_iface.insert(0, "can0")
-        self.entry_iface.grid(row=0, column=1, padx=5)
-
-        self.btn_connect = ttk.Button(frame_conn, text="Połącz", command=self.can_ctrl.toggle_connection)
-        self.btn_connect.grid(row=0, column=2, padx=5)
-        self.btn_export = ttk.Button(frame_conn, text="Eksportuj projekt", command=self.export_project)
-        self.btn_export.grid(row=0, column=4, padx=5)
-        self.btn_import = ttk.Button(frame_conn, text="Importuj projekt", command=self.import_project)
-        self.btn_import.grid(row=0, column=5, padx=5)
-        self.btn_reset = ttk.Button(frame_conn, text="Resetuj sesję", command=self.reset_session)
-        self.btn_reset.grid(row=0, column=6, padx=5)
-        self.btn_theme = ttk.Button(frame_conn, text="Zmień motyw", command=self.toggle_theme)
-        self.btn_theme.grid(row=0, column=8, padx=5)
-
-        self.lbl_status = ttk.Label(frame_conn, text="Niepołączony", foreground="red")
-        self.lbl_status.grid(row=0, column=3, padx=10)
-
-    def _create_basic_tools_frame(self, parent):
-        notebook = ttk.Notebook(parent)
-        notebook.pack(fill=tk.BOTH, expand=True)
-
-        tab_replay = ttk.Frame(notebook)
-        notebook.add(tab_replay, text="Odtwarzanie pliku")
-        replay_tab.setup_replay_tab(self, tab_replay)
-
-        tab_missing = ttk.Frame(notebook)
-        notebook.add(tab_missing, text="Symulacja modułu")
-        missing_tab.setup_missing_tab(self, tab_missing)
-
-        tab_error = ttk.Frame(notebook)
-        notebook.add(tab_error, text="Ramki błędu")
-        error_tab.setup_error_tab(self, tab_error)
-
-        tab_step = ttk.Frame(notebook)
-        notebook.add(tab_step, text="Tryb krokowy")
-        step_tab.setup_step_tab(self, tab_step)
-
-        tab_manual = ttk.Frame(notebook)
-        notebook.add(tab_manual, text="Wysyłanie ręczne")
-        manual_tab.setup_manual_tab(self, tab_manual)
-
-    def _create_search_frame(self, parent):
-        notebook = ttk.Notebook(parent)
-        notebook.pack(fill=tk.BOTH, expand=True)
-
-        tab_binary = ttk.Frame(notebook)
-        notebook.add(tab_binary, text="Wyszukiwanie binarne")
-        binary_tab.setup_binary_tab(self, tab_binary)
-
-        tab_wizard = ttk.Frame(notebook)
-        notebook.add(tab_wizard, text="Kreator wyszukiwania")
-        wizard_tab.setup_wizard_tab(self, tab_wizard)
-
-        tab_sniffer = ttk.Frame(notebook)
-        notebook.add(tab_sniffer, text="Sniffer CAN")
-        sniffer_tab.setup_sniffer_tab(self, tab_sniffer)
-
-    def _create_viz_ml_frame(self, parent):
-        notebook = ttk.Notebook(parent)
-        notebook.pack(fill=tk.BOTH, expand=True)
-
-        tab_chart = ttk.Frame(notebook)
-        notebook.add(tab_chart, text="Wykresy")
-        chart_tab.setup_chart_tab(self, tab_chart)
-
-        tab_advanced_ml = ttk.Frame(notebook)
-        notebook.add(tab_advanced_ml, text="Zaawansowane ML")
-        advanced_ml_tab.setup_advanced_ml_tab(self, tab_advanced_ml)
-
-        tab_pattern = ttk.Frame(notebook)
-        notebook.add(tab_pattern, text="Analiza wzorców")
-        pattern_tab.setup_pattern_tab(self, tab_pattern)
-
-        tab_ml = ttk.Frame(notebook)
-        notebook.add(tab_ml, text="Analiza ML")
-        ml_analysis_tab.setup_ml_tab(self, tab_ml)
-
-    def _create_network_frame(self, parent):
-        notebook = ttk.Notebook(parent)
-        notebook.pack(fill=tk.BOTH, expand=True)
-
-        tab_server = ttk.Frame(notebook)
-        notebook.add(tab_server, text="Serwer TCP")
-        server_tab.setup_server_tab(self, tab_server)
-
-        tab_remote = ttk.Frame(notebook)
-        notebook.add(tab_remote, text="Zdalny monitoring")
-        setup_remote_monitor_tab(self, tab_remote)
-
-        tab_generator = ttk.Frame(notebook)
-        notebook.add(tab_generator, text="Generator ruchu")
-        generator_tab.setup_generator_tab(self, tab_generator)
-
-    def _create_macro_frame(self, parent):
-        tab_macro = ttk.Frame(parent)
-        tab_macro.pack(fill=tk.BOTH, expand=True)
-        macro_tab.setup_macro_tab(self, tab_macro)
-
-    def _create_dbc_frame(self, parent):
-        tab_dbc = ttk.Frame(parent)
-        tab_dbc.pack(fill=tk.BOTH, expand=True)
-        setup_dbc_manager_tab(self, tab_dbc)
-
-
     def bind_shortcuts(self):
         """Przypisuje globalne skróty klawiszowe."""
         self.root.bind('<F5>', lambda e: self.sniffer_ctrl.start_sniffer() if not self.sniffer_running else None)
@@ -584,7 +485,7 @@ WIĘCEJ INFORMACJI:
         except Exception as e:
             messagebox.showerror("Błąd importu", str(e))
 
-    def detach_tab_disabled(self, *args):
+    def detach_tab(self, tab_index):
         """Odrywa zakładkę do osobnego okna."""
         tab_frame = self.notebook.nametowidget(self.notebook.tabs()[tab_index])
         tab_text = self.notebook.tab(tab_index, 'text')
@@ -596,18 +497,29 @@ WIĘCEJ INFORMACJI:
         new_win.protocol("WM_DELETE_WINDOW", lambda: self.attach_tab(tab_frame, tab_text, new_win))
         tab_frame.pack(fill=tk.BOTH, expand=True)
 
-    def attach_tab_disabled(self, *args):
+    def attach_tab(self, tab_frame, tab_text, popup):
         """Przywraca zakładkę do głównego okna."""
         popup.destroy()
         self.notebook.add(tab_frame, text=tab_text)
         self.notebook.select(tab_frame)
 
-    def setup_detachable_tabs_disabled(self):
-        pass
-    def _show_tab_menu_disabled(self, event):
-        pass
-    def _detach_selected_tab_disabled(self):
-        pass
+    def setup_detachable_tabs(self):
+        """Dodaje menu kontekstowe do zakładek."""
+        self.notebook.bind('<Button-3>', self._show_tab_menu)
+        self.tab_menu = tk.Menu(self.root, tearoff=0)
+        self.tab_menu.add_command(label="Oderwij zakładkę", command=self._detach_selected_tab)
+
+    def _show_tab_menu(self, event):
+        """Pokazuje menu kontekstowe po kliknięciu prawym na zakładkę."""
+        try:
+            self.tab_menu.tk_popup(event.x_root, event.y_root)
+        finally:
+            self.tab_menu.grab_release()
+
+    def _detach_selected_tab(self):
+        tab_index = self.notebook.index('@%d,%d' % (self.tab_menu.winfo_pointerx(), self.tab_menu.winfo_pointery()))
+        self.detach_tab(tab_index)
+
     def show_progress(self, title="Proszę czekać", maximum=100):
         """Pokazuje okno z paskiem postępu."""
         self.progress_win = tk.Toplevel(self.root)
@@ -645,10 +557,6 @@ WIĘCEJ INFORMACJI:
         style.configure('TNotebook.Tab', background='#3e3e3e', foreground='#ffffff')
         self.root.configure(bg='#2e2e2e')
         self.log_text.configure(bg='#1e1e1e', fg='#ffffff')
-
-    def _create_bridge_frame(self, parent):
-        setup_bridge_tab(self, parent)
-
 
     def _apply_light_theme(self):
         style = ttk.Style()

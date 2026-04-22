@@ -1,30 +1,23 @@
-┌──(venv)─(nz2xzhkzfeewkgbu㉿y5enjsya4t4pv4fn)-[/run/…/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator]
-└─$ sudo ./run.sh
-2026-04-22 18:28:07,388 [INFO] CANSimulator - === CAN Simulator GUI ===
-2026-04-22 18:28:07,388 [INFO] CANSimulator - Czas: 2026-04-22 18:28:07.388285, Python: 3.13.12 (main, Feb  4 2026, 15:06:39) [GCC 15.2.0]
-2026-04-22 18:28:07,937 [INFO] numexpr.utils - NumExpr defaulting to 12 threads.
-2026-04-22 18:28:08,713 [DEBUG] matplotlib - matplotlib data path: /run/media/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator/venv/lib/python3.13/site-packages/matplotlib/mpl-data
-2026-04-22 18:28:08,715 [DEBUG] matplotlib - CONFIGDIR=/root/.config/matplotlib
-2026-04-22 18:28:08,718 [DEBUG] matplotlib - interactive is False
-2026-04-22 18:28:08,718 [DEBUG] matplotlib - platform is linux
-2026-04-22 18:28:08,729 [DEBUG] matplotlib - CACHEDIR=/root/.cache/matplotlib
-2026-04-22 18:28:08,737 [DEBUG] matplotlib.font_manager - Using fontManager instance from /root/.cache/matplotlib/fontlist-v390.json
-2026-04-22 18:28:08,883 [DEBUG] canmatrix.formats - ldf is not supported
-2026-04-22 18:28:08,890 [DEBUG] canmatrix.formats - xls is not supported
-2026-04-22 18:28:08,891 [DEBUG] canmatrix.formats - xlsx is not supported
-2026-04-22 18:28:08,891 [DEBUG] canmatrix.formats - yaml is not supported
-2026-04-22 18:28:08,892 [DEBUG] canmatrix.formats - eds is not supported
-2026-04-22 18:28:09,161 [CRITICAL] CANSimulator - Import error
+2026-04-22 18:38:49,509 [CRITICAL] CANSimulator - Nieobsłużony wyjątek
 Traceback (most recent call last):
-  File "/run/media/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator/main.py", line 29, in <module>
-    from gui.app import CanSimulatorApp
-  File "/run/media/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator/gui/__init__.py", line 1, in <module>
-    from .app import CanSimulatorApp
-  File "/run/media/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator/gui/app.py", line 12, in <module>
-    from gui.tabs.dbc_manager_tab import setup_dbc_manager_tab
-  File "/run/media/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator/gui/tabs/dbc_manager_tab.py", line 37
-    update_signal_list()
-IndentationError: unexpected indent
+  File "/run/media/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator/main.py", line 36, in <module>
+    app = CanSimulatorApp(root)
+  File "/run/media/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator/gui/app.py", line 87, in __init__
+    self.setup_detachable_tabs()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/run/media/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator/gui/app.py", line 605, in setup_detachable_tabs
+    self.notebook.bind('<Button-3>', self._show_tab_menu)
+    ^^^^^^^^^^^^^
+AttributeError: 'CanSimulatorApp' object has no attribute 'notebook'
+Traceback (most recent call last):
+  File "/run/media/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator/main.py", line 36, in <module>
+    app = CanSimulatorApp(root)
+  File "/run/media/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator/gui/app.py", line 87, in __init__
+    self.setup_detachable_tabs()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/run/media/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator/gui/app.py", line 605, in setup_detachable_tabs
+    self.notebook.bind('<Button-3>', self._show_tab_menu)
+    ^^^^^^^^^^^^^
+AttributeError: 'CanSimulatorApp' object has no attribute 'notebook'
 
 ┌──(venv)─(nz2xzhkzfeewkgbu㉿y5enjsya4t4pv4fn)-[/run/…/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator]
-└─$
