@@ -1,0 +1,236 @@
+\chapter{Kod źródłowy serwera WebSocket (server.py)}
+\label{app:server}
+
+Poniżej przedstawiono pełny kod pliku \texttt{broadcaster/server.py}. Serwer obsługuje tokeny, SSL, autoryzację ID, logowanie do pliku, powiadomienia Telegram oraz opcjonalny interfejs webowy (dashboard).
+
+\lstset{language=Python, basicstyle=\ttfamily\footnotesize, breaklines=true, frame=single, numbers=left, numberstyle=\tiny, caption={}, captionpos=b}
+\begin{lstlisting}
+"""
+Serwer WebSocket do przesyłania ramek CAN w czasie rzeczywistym.
+Obsługuje opcjonalny token autoryzacyjny, autoryzację ID, logowanie do pliku,
+powiadomienia Telegram oraz interfejs webowy (dashboard).
+"""
+
+import asyncio
+import json
+import logging
+from datetime import datetime
+from typing import Set, Optional
+import ssl
+import urllib.request
+import urllib.parse
+import os
+
+import websockets
+from websockets.server import WebSocketServerProtocol
+
+\# aiohttp jest opcjonalne – jeśli nie ma, dashboard HTTP nie będzie dostępny
+try:
+    from aiohttp import web
+    AIOHTTP\_AVAILABLE = True
+except ImportError:
+    AIOHTTP\_AVAILABLE = False
+    web = None
+
+logger = logging.getLogger(\_\_name\_\_)
+
+
+class CANWebSocketServer:
+    def \_\_init\_\_(self, host: str = "0.0.0.0", port: int = 8765,
+                 token: Optional[str] = None, ssl\_context: Optional[ssl.SSLContext] = None):
+        self.host = host
+        self.port = port
+        self.token = token
+        self.ssl\_context = ssl\_context
+        self.\_server = None
+        self.\_clients: Set[WebSocketServerProtocol] = set()
+
+        self.can\_interface = None
+        self.allowed\_client\_ids = None
+        self.incoming\_filter\_ids = None
+        self.log\_to\_file = False
+        self.log\_file\_path = "remote\_operations.log"
+
+        self.telegram\_token = None
+        self.telegram\_chat\_id = None
+
+        self.enable\_http = False
+        self.http\_port = 8080
+        self.http\_app = None
+        self.http\_runner = None
+
+        self.\_running = False
+
+    def \_send\_telegram(self, message):
+        if not self.telegram\_token or not self.telegram\_chat\_id:
+            return
+        try:
+            url = f"https://api.telegram.org/bot\{self.telegram\_token\}/sendMessage"
+            data = urllib.parse.urlencode(\{
+                "chat\_id": self.telegram\_chat\_id,
+                "text": f"🚗 CAN Simulator\textbackslash n\{message\}",
+                "parse\_mode": "HTML"
+            \}).encode("utf-8")
+            req = urllib.request.Request(url, data=data)
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                if resp.getcode() != 200:
+                    logger.warning(f"Telegram odpowiedział kodem \{resp.getcode()\}")
+        except Exception as e:
+            logger.error(f"Błąd wysyłania do Telegram: \{e\}")
+
+    async def \_handler(self, websocket: WebSocketServerProtocol):
+        logger.info(f"Nowy klient: \{websocket.remote\_address\}")
+
+        if self.token:
+            try:
+                msg = await asyncio.wait\_for(websocket.recv(), timeout=5.0)
+                if msg != self.token:
+                    logger.warning(f"Nieprawidłowy token od \{websocket.remote\_address\}")
+                    await websocket.close(1008, "Invalid token")
+                    return
+                logger.info(f"Token zaakceptowany od \{websocket.remote\_address\}")
+            except asyncio.TimeoutError:
+                logger.warning(f"Timeout tokena od \{websocket.remote\_address\}")
+                await websocket.close(1008, "Token timeout")
+                return
+
+        if self.allowed\_client\_ids is not None:
+            try:
+                msg = await asyncio.wait\_for(websocket.recv(), timeout=5.0)
+                data = json.loads(msg)
+                client\_ids = set(data.get("allowed\_ids", []))
+                if not client\_ids.issubset(self.allowed\_client\_ids):
+                    logger.warning(f"Klient \{websocket.remote\_address\} próbował użyć niedozwolonych ID")
+                    await websocket.close(1008, "Forbidden IDs")
+                    return
+                websocket.client\_allowed\_ids = client\_ids
+                logger.info(f"Klient \{websocket.remote\_address\} autoryzowany z ID: \{client\_ids\}")
+            except (asyncio.TimeoutError, json.JSONDecodeError):
+                logger.warning(f"Błąd autoryzacji ID od \{websocket.remote\_address\}")
+                await websocket.close(1008, "Invalid ID list")
+                return
+
+        self.\_clients.add(websocket)
+        logger.info(f"Klient dodany, łącznie: \{len(self.\_clients)\}")
+        self.\_send\_telegram(f"🟢 Klient połączony: \{websocket.remote\_address\}")
+
+        try:
+            async for message in websocket:
+                await self.\_handle\_incoming\_frame(websocket, message)
+        except websockets.exceptions.ConnectionClosed:
+            logger.info(f"Połączenie zamknięte przez klienta \{websocket.remote\_address\}")
+        finally:
+            self.\_clients.remove(websocket)
+            logger.info(f"Klient rozłączony, pozostało: \{len(self.\_clients)\}")
+            self.\_send\_telegram(f"🔴 Klient rozłączony: \{websocket.remote\_address\}")
+
+    async def \_handle\_incoming\_frame(self, websocket, message):
+        if not self.incoming\_filter\_ids:
+            logger.debug("Brak filtru przychodzącego – ramka odrzucona.")
+            return
+        try:
+            data = json.loads(message)
+            can\_id = int(data['id'], 16) if isinstance(data['id'], str) else data['id']
+            if can\_id not in self.incoming\_filter\_ids:
+                logger.debug(f"ID 0x\{can\_id:X\} nie przechodzi filtra przychodzącego.")
+                return
+            payload = bytes(data['data'])
+            is\_extended = data.get('is\_extended', False)
+            if self.can\_interface and self.can\_interface.connected:
+                success, msg = self.can\_interface.send\_frame(can\_id, payload, is\_extended)
+                if success:
+                    logger.info(f"Wysłano na CAN: ID=0x\{can\_id:X\}, data=\{payload.hex().upper()\}")
+                    if self.log\_to\_file:
+                        self.\_log\_to\_file(f"RX from \{websocket.remote\_address\}: \{message\}")
+                else:
+                    logger.error(f"Błąd wysyłania na CAN: \{msg\}")
+                    self.\_send\_telegram(f"❌ Błąd wysyłania na CAN: \{msg\}")
+            else:
+                logger.warning("CAN niepodłączony – ramka odrzucona.")
+        except Exception as e:
+            logger.error(f"Błąd przetwarzania ramki od klienta: \{e\}")
+
+    def \_create\_http\_app(self):
+        if not AIOHTTP\_AVAILABLE:
+            return None
+        app = web.Application()
+        web\_dir = os.path.join(os.path.dirname(os.path.dirname(\_\_file\_\_)), 'web\_dashboard')
+        if os.path.isdir(web\_dir):
+            app.router.add\_static('/', web\_dir, show\_index=True)
+        return app
+
+    async def start(self):
+        if self.\_running:
+            return
+        logger.info(f"Uruchamianie serwera WebSocket na \{self.host\}:\{self.port\} (SSL: \{self.ssl\_context is not None\})")
+        self.\_server = await websockets.serve(
+            self.\_handler, self.host, self.port, ssl=self.ssl\_context
+        )
+        self.\_running = True
+
+        if self.enable\_http:
+            self.http\_app = self.\_create\_http\_app()
+            if self.http\_app:
+                runner = web.AppRunner(self.http\_app)
+                await runner.setup()
+                site = web.TCPSite(runner, self.host, self.http\_port)
+                await site.start()
+                self.http\_runner = runner
+                logger.info(f"Interfejs webowy dostępny na http://\{self.host\}:\{self.http\_port\}")
+
+    async def stop(self):
+        if not self.\_running:
+            return
+        logger.info("Zatrzymywanie serwera...")
+        self.\_server.close()
+        await self.\_server.wait\_closed()
+        for client in list(self.\_clients):
+            await client.close()
+        self.\_clients.clear()
+
+        if self.http\_runner:
+            await self.http\_runner.cleanup()
+            self.http\_runner = None
+
+        self.\_running = False
+        logger.info("Serwer zatrzymany")
+
+    def \_log\_to\_file(self, msg):
+        try:
+            with open(self.log\_file\_path, 'a', encoding='utf-8') as f:
+                f.write(f"\{datetime.now().isoformat()\} \{msg\}\textbackslash n")
+        except Exception as e:
+            logger.error(f"Błąd zapisu do pliku logu: \{e\}")
+
+    def broadcast\_frame(self, frame: dict):
+        if not self.\_running or not self.\_clients:
+            return
+        message = json.dumps(frame)
+        for client in list(self.\_clients):
+            try:
+                asyncio.create\_task(client.send(message))
+            except Exception as e:
+                logger.error(f"Błąd wysyłania: \{e\}")
+
+    async def broadcast\_frame\_async(self, frame: dict):
+        if not self.\_running or not self.\_clients:
+            return
+        message = json.dumps(frame)
+
+        if self.log\_to\_file:
+            self.\_log\_to\_file(f"TX to clients: \{message\}")
+
+        for client in list(self.\_clients):
+            try:
+                await client.send(message)
+            except Exception as e:
+                logger.error(f"Błąd wysyłania async: \{e\}")
+
+    @property
+    def client\_count(self) -> int:
+        return len(self.\_clients)
+
+    @property
+    def is\_running(self) -> bool:
+        return self.\_running
+\end{lstlisting}

@@ -1,0 +1,234 @@
+\chapter{Kod źródłowy mostka vCAN (bridge\_client.py)}
+\label{app:bridge}
+
+Poniżej przedstawiono pełny kod pliku \texttt{bridge\_client.py} (wersja dwukierunkowa z obsługą auto-reconnect, filtrowania ID oraz wysyłania ramek z vcan0 do serwera).
+
+\lstset{language=Python, basicstyle=\ttfamily\footnotesize, breaklines=true, frame=single, numbers=left, numberstyle=\tiny, caption={}, captionpos=b}
+\begin{lstlisting}
+\#!/usr/bin/env python3
+"""
+Mostek WebSocket -> wirtualny CAN (vcan0) z auto-reconnect i filtrowaniem ID.
+Dwukierunkowy: odbiera ramki z WebSocket -> vcan0 oraz wysyła ramki z vcan0 -> WebSocket.
+"""
+
+import json
+import logging
+import threading
+import time
+import subprocess
+import sys
+import argparse
+from typing import List, Optional
+
+import websocket
+
+try:
+    import can
+    from can import ThreadSafeBus
+except ImportError:
+    can = None
+    ThreadSafeBus = None
+
+logging.basicConfig(level=logging.INFO, format='\%(asctime)s [\%(levelname)s] \%(message)s')
+logger = logging.getLogger("CAN-Bridge")
+
+
+class VCanBridge:
+    def \_\_init\_\_(self, url: str, token: Optional[str] = None,
+                 filter\_ids: Optional[List[int]] = None,
+                 auto\_reconnect: bool = True,
+                 reconnect\_delay: int = 5,
+                 status\_callback=None):
+        self.url = url
+        self.token = token
+        self.filter\_ids = set(filter\_ids) if filter\_ids else None
+        self.auto\_reconnect = auto\_reconnect
+        self.reconnect\_delay = reconnect\_delay
+        self.status\_callback = status\_callback
+
+        self.ws = None
+        self.bus = None
+        self.running = False
+        self.reconnect\_thread = None
+
+        self.sending\_to\_vcan = False   \# flaga zapobiegająca pętli zwrotnej
+        self.tx\_thread = None
+
+        self.\_setup\_vcan()
+
+    def \_setup\_vcan(self):
+        if can is None:
+            raise RuntimeError("python-can not installed; bridge cannot run.")
+        try:
+            subprocess.run(['ip', 'link', 'show', 'vcan0'], check=True, capture\_output=True)
+            logger.info("vcan0 już istnieje.")
+        except subprocess.CalledProcessError:
+            logger.info("Tworzenie vcan0...")
+            subprocess.run(['sudo', 'ip', 'link', 'add', 'dev', 'vcan0', 'type', 'vcan'], check=True)
+            subprocess.run(['sudo', 'ip', 'link', 'set', 'vcan0', 'up'], check=True)
+            logger.info("vcan0 utworzony i włączony.")
+        self.bus = ThreadSafeBus(channel='vcan0', interface='socketcan')
+
+    def \_should\_forward(self, can\_id: int) -> bool:
+        if self.filter\_ids is None:
+            return True
+        return can\_id in self.filter\_ids
+
+    def \_on\_message(self, ws, message):
+        try:
+            data = json.loads(message)
+            can\_id = int(data['id'], 16) if isinstance(data['id'], str) else data['id']
+
+            if not self.\_should\_forward(can\_id):
+                logger.debug(f"Pominięto ID 0x\{can\_id:X\} (filtrowanie)")
+                return
+
+            payload = bytes(data['data'])
+            is\_extended = data.get('is\_extended', False)
+            msg = can.Message(arbitration\_id=can\_id, data=payload, is\_extended\_id=is\_extended)
+            self.sending\_to\_vcan = True
+            self.bus.send(msg)
+            self.sending\_to\_vcan = False
+            if self.status\_callback:
+                self.status\_callback(f"Odebrano z serwera: \{msg\}")
+        except Exception as e:
+            logger.error(f"Błąd ramki: \{e\}")
+
+    def \_on\_error(self, ws, error):
+        logger.error(f"WebSocket error: \{error\}")
+        if self.status\_callback:
+            self.status\_callback(f"Błąd: \{error\}")
+
+    def \_on\_close(self, ws, code, msg):
+        logger.info("WebSocket zamknięty.")
+        if self.status\_callback:
+            self.status\_callback("Rozłączono")
+        if self.auto\_reconnect and self.running:
+            self.\_start\_reconnect()
+
+    def \_on\_open(self, ws):
+        logger.info("Połączono z serwerem.")
+        if self.token:
+            ws.send(self.token)
+        \# Wyślij listę dozwolonych ID (jeśli ustawiono)
+        if self.filter\_ids is not None:
+            allowed\_msg = json.dumps(\{"allowed\_ids": list(self.filter\_ids)\})
+            ws.send(allowed\_msg)
+            logger.info(f"Wysłano listę dozwolonych ID: \{self.filter\_ids\}")
+
+        if self.status\_callback:
+            self.status\_callback("Połączono")
+
+    def \_start\_reconnect(self):
+        if self.reconnect\_thread and self.reconnect\_thread.is\_alive():
+            return
+        self.reconnect\_thread = threading.Thread(target=self.\_reconnect\_loop, daemon=True)
+        self.reconnect\_thread.start()
+
+    def \_reconnect\_loop(self):
+        while self.running:
+            logger.info(f"Próba ponownego połączenia za \{self.reconnect\_delay\} s...")
+            time.sleep(self.reconnect\_delay)
+            if not self.running:
+                break
+            try:
+                self.ws = websocket.WebSocketApp(
+                    self.url,
+                    on\_open=self.\_on\_open,
+                    on\_message=self.\_on\_message,
+                    on\_error=self.\_on\_error,
+                    on\_close=self.\_on\_close
+                )
+                wst = threading.Thread(target=self.ws.run\_forever, daemon=True)
+                wst.start()
+                break
+            except Exception as e:
+                logger.error(f"Błąd reconnect: \{e\}")
+
+    def start(self):
+        self.running = True
+        self.ws = websocket.WebSocketApp(
+            self.url,
+            on\_open=self.\_on\_open,
+            on\_message=self.\_on\_message,
+            on\_error=self.\_on\_error,
+            on\_close=self.\_on\_close
+        )
+        wst = threading.Thread(target=self.ws.run\_forever, daemon=True)
+        wst.start()
+
+        \# Uruchom wątek nadawczy (vcan -> WebSocket)
+        self.tx\_thread = threading.Thread(target=self.\_tx\_loop, daemon=True)
+        self.tx\_thread.start()
+
+    def \_tx\_loop(self):
+        """Wątek odbierający ramki z vcan0 i wysyłający je przez WebSocket."""
+        while self.running:
+            try:
+                msg = self.bus.recv(timeout=0.5)
+                if msg is None:
+                    continue
+                if self.sending\_to\_vcan:
+                    continue
+                if self.filter\_ids and msg.arbitration\_id not in self.filter\_ids:
+                    continue
+                if self.ws and self.ws.sock and self.ws.sock.connected:
+                    frame = \{
+                        "id": hex(msg.arbitration\_id),
+                        "data": list(msg.data),
+                        "is\_extended": msg.is\_extended\_id
+                    \}
+                    self.ws.send(json.dumps(frame))
+                    if self.status\_callback:
+                        self.status\_callback(f"Wysłano do serwera: \{msg\}")
+            except Exception as e:
+                logger.error(f"Błąd w pętli TX: \{e\}")
+                time.sleep(0.1)
+
+    def stop(self):
+        self.running = False
+        if self.tx\_thread:
+            self.tx\_thread.join(timeout=1.0)
+        if self.ws:
+            self.ws.close()
+        if self.bus:
+            self.bus.shutdown()
+        if self.status\_callback:
+            self.status\_callback("Zatrzymano")
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add\_argument('--url', default='ws://localhost:8765')
+    parser.add\_argument('--token')
+    parser.add\_argument('--filter-ids', help='Lista ID CAN oddzielonych przecinkami, np. 0x123,0x456')
+    parser.add\_argument('--no-auto-reconnect', action='store\_true', help='Wyłącz automatyczne ponawianie')
+    args = parser.parse\_args()
+
+    filter\_ids = None
+    if args.filter\_ids:
+        try:
+            filter\_ids = [int(x.strip(), 16) if x.strip().startswith('0x') else int(x.strip())
+                          for x in args.filter\_ids.split(',')]
+        except ValueError:
+            logger.error("Nieprawidłowy format listy ID.")
+            sys.exit(1)
+
+    bridge = VCanBridge(
+        url=args.url,
+        token=args.token,
+        filter\_ids=filter\_ids,
+        auto\_reconnect=not args.no\_auto\_reconnect,
+        status\_callback=print
+    )
+    bridge.start()
+    try:
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        bridge.stop()
+
+
+if \_\_name\_\_ == "\_\_main\_\_":
+    main()
+\end{lstlisting}

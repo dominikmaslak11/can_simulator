@@ -49,10 +49,6 @@ def setup_advanced_ml_tab(app, tab):
 
 
 def setup_forecast_tab(app, frame):
-    # Konfiguracja siatki – wiersz 5 (canvas) i kolumna 1 (entry) będą się rozszerzać
-    frame.grid_rowconfigure(5, weight=1)
-    frame.grid_columnconfigure(1, weight=1)
-
     ttk.Label(frame, text="Plik z danymi:").grid(row=0, column=0, sticky=tk.W, padx=5, pady=5)
     file_var = tk.StringVar()
     ttk.Entry(frame, textvariable=file_var, width=50).grid(row=0, column=1, padx=5)
@@ -75,8 +71,7 @@ def setup_forecast_tab(app, frame):
     fig = Figure(figsize=(8, 4))
     ax = fig.add_subplot(111)
     canvas = FigureCanvasTkAgg(fig, master=frame)
-    # Zamiast pack używamy grid
-    canvas.get_tk_widget().grid(row=5, column=0, columnspan=3, sticky="nsew", padx=5, pady=5)
+    canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
 
     app.forecast_fig = fig
     app.forecast_ax = ax
@@ -85,9 +80,6 @@ def setup_forecast_tab(app, frame):
 
 
 def setup_correlation_tab(app, frame):
-    frame.grid_rowconfigure(2, weight=1)
-    frame.grid_columnconfigure(1, weight=1)
-
     ttk.Label(frame, text="Plik z danymi:").grid(row=0, column=0, sticky=tk.W, padx=5, pady=5)
     file_var = tk.StringVar()
     ttk.Entry(frame, textvariable=file_var, width=50).grid(row=0, column=1, padx=5)
@@ -98,7 +90,7 @@ def setup_correlation_tab(app, frame):
     fig = Figure(figsize=(8, 6))
     ax = fig.add_subplot(111)
     canvas = FigureCanvasTkAgg(fig, master=frame)
-    canvas.get_tk_widget().grid(row=2, column=0, columnspan=3, sticky="nsew", padx=5, pady=5)
+    canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
 
     app.corr_fig = fig
     app.corr_ax = ax
@@ -106,9 +98,6 @@ def setup_correlation_tab(app, frame):
 
 
 def setup_explorer_tab(app, frame):
-    frame.grid_rowconfigure(4, weight=1)
-    frame.grid_columnconfigure(1, weight=1)
-
     ttk.Label(frame, text="Plik z danymi:").grid(row=0, column=0, sticky=tk.W, padx=5, pady=5)
     file_var = tk.StringVar()
     ttk.Entry(frame, textvariable=file_var, width=50).grid(row=0, column=1, padx=5)
@@ -133,7 +122,7 @@ def setup_explorer_tab(app, frame):
     fig = Figure(figsize=(8, 6))
     ax = fig.add_subplot(111)
     canvas = FigureCanvasTkAgg(fig, master=frame)
-    canvas.get_tk_widget().grid(row=4, column=0, columnspan=4, sticky="nsew", padx=5, pady=5)
+    canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
 
     app.explorer_fig = fig
     app.explorer_ax = ax

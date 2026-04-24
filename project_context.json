@@ -1,0 +1,130 @@
+{
+  "project": "CAN Simulator GUI",
+  "version": "3.1",
+  "last_updated": "2026-04-24",
+  "summary": "Zaawansowane narzędzie do analizy, symulacji i diagnostyki magistrali CAN. Integruje odtwarzanie logów, sniffer, wyszukiwanie binarne, kreator ramek, analizę ML (nadzorowaną i nienadzorowaną), prognozowanie LSTM, korelację sygnałów, eksport do ASC/Parquet/MDF4, edytor DBC, generator ruchu, makra, tryb serwera TCP i wiele więcej.",
+  "current_stage": "Zakończony Etap D, trwają przygotowania do Etapu E.",
+  "structure": {
+    "can_simulator/": {
+      "main.py": "Punkt wejścia – logowanie, uruchomienie GUI.",
+      "can_interface.py": "Klasa CanInterface – obsługa SocketCAN.",
+      "parsers.py": "Parsowanie candump i logów.",
+      "session_manager.py": "Zapis/odczyt sesji (JSON).",
+      "project_manager.py": "Eksport/import całego projektu (.csp).",
+      "server_mode.py": "Tryb serwera TCP.",
+      "macro_recorder.py": "Nagrywanie i odtwarzanie makr.",
+      "ml/": {
+        "feature_extractor.py": "Ekstrakcja cech (statystycznych i sekwencyjnych).",
+        "model.py": "Model regresji logistycznej (scikit-learn).",
+        "sequential_model.py": "Model LSTM dla sekwencji (PyTorch).",
+        "session_classifier.py": "Klasyfikacja sesji ML i wykrywanie anomalii (Isolation Forest).",
+        "pattern_detector.py": "Autoenkoder do wykrywania wzorców (PyTorch).",
+        "advanced_models.py": "LSTM do prognozowania sygnałów."
+      },
+      "threads/": {
+        "simulation_thread.py": "Wątek symulacji (replay, missing, error).",
+        "binary_search_thread.py": "Wyszukiwanie binarne z ML.",
+        "wizard_search_thread.py": "Wątek kreatora wyszukiwania.",
+        "sniffer_thread.py": "Wątek nasłuchujący CAN."
+      },
+      "controllers/": {
+        "base_controller.py": "Klasa bazowa dla kontrolerów.",
+        "can_controller.py": "Połączenie CAN.",
+        "replay_controller.py": "Odtwarzanie plików.",
+        "missing_controller.py": "Symulacja modułu.",
+        "error_controller.py": "Ramki błędu.",
+        "step_controller.py": "Tryb krokowy.",
+        "manual_controller.py": "Wysyłanie ręczne.",
+        "binary_controller.py": "Wyszukiwanie binarne.",
+        "wizard_controller.py": "Kreator wyszukiwania.",
+        "sniffer/": {
+          "base.py": "Bazowa klasa Sniffera.",
+          "display_modes.py": "Tryby wyświetlania (keep-alive, overwrite, bit view).",
+          "dbc_handler.py": "Obsługa DBC, przeglądarka sygnałów.",
+          "core.py": "Start/stop, kolejka, highlight_time_range.",
+          "export.py": "Eksport do logu, CSV, ASC, Parquet, MDF4."
+        }
+      },
+      "gui/": {
+        "app.py": "Główna klasa CanSimulatorApp.",
+        "utils.py": "Pomocnicze funkcje logowania.",
+        "widgets/virtual_treeview.py": "Wydajny Treeview dla dużych danych.",
+        "tabs/": {
+          "replay_tab.py": "Zakładka odtwarzania.",
+          "missing_tab.py": "Zakładka symulacji modułu (tabela ramek).",
+          "error_tab.py": "Zakładka ramek błędu (tabela ramek).",
+          "step_tab.py": "Tryb krokowy.",
+          "manual_tab.py": "Wysyłanie ręczne.",
+          "binary_tab.py": "Wyszukiwanie binarne.",
+          "wizard_tab.py": "Kreator wyszukiwania.",
+          "sniffer_tab.py": "Sniffer CAN (VirtualTreeview).",
+          "chart_tab.py": "Wykresy.",
+          "ml_analysis_tab.py": "Analiza ML (nadzorowana i bez nadzoru).",
+          "pattern_tab.py": "Analiza wzorców (autoenkoder).",
+          "advanced_ml_tab.py": "Zaawansowane ML (prognozowanie LSTM, korelacja, eksplorator).",
+          "server_tab.py": "Serwer TCP.",
+          "generator_tab.py": "Generator ruchu CAN.",
+          "macro_tab.py": "Nagrywanie i odtwarzanie makr."
+        }
+      },
+      "tests/": {
+        "test_parsers.py": "Testy parserów.",
+        "test_binary_search.py": "Testy wyszukiwania binarnego.",
+        "test_cyclic_detector.py": "Testy detektora cyklicznego.",
+        "test_integration.py": "Testy integracyjne (vcan).",
+        "test_wizard.py": "Testy kreatora (część pominięta)."
+      }
+    }
+  },
+  "completed_stages": {
+    "A": {
+      "name": "Fundamenty – testy i CI",
+      "description": "Dodano testy jednostkowe, GitHub Actions.",
+      "files": ["tests/*", "pytest.ini", ".github/workflows/test.yml"]
+    },
+    "B": {
+      "name": "Wydajność i UX",
+      "description": "Wirtualny Treeview, dokowanie zakładek, pasek postępu, motywy kolorystyczne.",
+      "files": ["gui/widgets/virtual_treeview.py", "gui/app.py (dodane metody)"]
+    },
+    "C": {
+      "name": "Integracja z ekosystemem",
+      "description": "Eksport Parquet/MDF4, edytor DBC.",
+      "files": ["controllers/sniffer/export.py", "controllers/sniffer/dbc_handler.py"]
+    },
+    "D": {
+      "name": "Zaawansowane ML i analiza danych",
+      "description": "Prognozowanie LSTM, korelacja sygnałów, eksplorator danych.",
+      "files": ["ml/advanced_models.py", "gui/tabs/advanced_ml_tab.py"]
+    }
+  },
+  "next_stage": {
+    "E": {
+      "name": "Funkcje niszowe i społeczność",
+      "tasks": [
+        "Wbudowana konsola Python z dostępem do obiektu 'app'.",
+        "System pluginów – skanowanie katalogu plugins/.",
+        "Tryb zdalny (klient-serwer) – wykorzystanie istniejącego server_mode.py.",
+        "Emulacja prostego ECU – odpowiedzi na żądania diagnostyczne."
+      ]
+    }
+  },
+  "future_ideas": [
+    {
+      "name": "Testy i CI (uzupełnienie)",
+      "description": "Rozszerzyć testy o wizard, integracyjne z vcan. Zwiększyć pokrycie kodu."
+    },
+    {
+      "name": "Dalsza wydajność",
+      "description": "Strumieniowanie dużych logów z dysku, indeksowanie."
+    },
+    {
+      "name": "Współpraca z Vector",
+      "description": "Import konfiguracji .cfg (CANalyzer), auto-generowanie DBC."
+    }
+  ],
+  "preferred_workflow": {
+    "description": "Użytkownik preferuje otrzymywać gotowe skrypty update.sh/fix_tests.sh, które automatyzują wdrożenie zmian. Skrypty powinny być uruchamiane w katalogu głównym projektu (can_simulator). Po każdym etapie prosi o zestaw komend do aktualizacji repozytorium GitHub (git add, commit, push)."
+  },
+  "how_to_use_this_file": "W nowym chacie powiedz: 'Wczytaj proszę plik project_context.json, który zawiera pełną historię i stan projektu CAN Simulator GUI. Kontynuujemy pracę od zakończonego Etapu D, ruszamy z Etapem E.'"
+}

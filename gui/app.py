@@ -13,6 +13,8 @@ from gui.tabs.remote_monitor_tab import setup_remote_monitor_tab
 from gui.tabs.dbc_manager_tab import setup_dbc_manager_tab
 from gui.tabs.bridge_tab import setup_bridge_tab
 from gui.tabs.recording_tab import setup_recording_tab
+from gui.tabs.console_tab import ConsoleWidget
+from gui.tabs.ecu_tab import EcuTab
 from gui.utils import write_log_to_file
 from controllers import (
     CanController, ReplayController, MissingController, ErrorController,
@@ -162,13 +164,14 @@ class CanSimulatorApp:
         # Definicje kategorii i odpowiadających im funkcji setup
         categories = [
             ("Połączenie CAN", self._create_connection_frame),
+            ("Narzędzia niszowe", self._create_niche_frame),
             ("Podstawowe narzędzia", self._create_basic_tools_frame),
             ("Wyszukiwanie i analiza", self._create_search_frame),
             ("Wizualizacja i ML", self._create_viz_ml_frame),
             ("Sieć i zdalny dostęp", self._create_network_frame),
             ("Makra", self._create_macro_frame),
             ("DBC Manager", self._create_dbc_frame),
-                    ]
+        ]
 
         for idx, (cat_name, setup_func) in enumerate(categories):
             self.sidebar.insert(tk.END, cat_name)
@@ -470,6 +473,21 @@ class CanSimulatorApp:
         notebook.add(tab_recording, text="Nagrywanie sesji")
         setup_recording_tab(self, tab_recording)
 
+
+    def _create_niche_frame(self, parent):
+        notebook = ttk.Notebook(parent)
+        notebook.pack(fill=tk.BOTH, expand=True)
+
+        tab_console = ttk.Frame(notebook)
+        notebook.add(tab_console, text="Konsola Python")
+        self.console_tab = ConsoleWidget(self)
+        # Konsola nie używa setup_, tylko jest widgetem – opakowujemy ją w ramkę
+        self.console_tab.pack(in_=tab_console, fill=tk.BOTH, expand=True)
+
+        tab_ecu = ttk.Frame(notebook)
+        notebook.add(tab_ecu, text="Emulator ECU")
+        self.ecu_tab = EcuTab(self)
+        self.ecu_tab.pack(in_=tab_ecu, fill=tk.BOTH, expand=True)
 
     def _create_macro_frame(self, parent):
         tab_macro = ttk.Frame(parent)

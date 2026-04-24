@@ -5,6 +5,7 @@ import time
 
 logger = logging.getLogger("CanServer")
 
+
 class CanServer:
     def __init__(self, can_interface, port=5555):
         self.can = can_interface
@@ -50,3 +51,28 @@ class CanServer:
     def get_client_count(self):
         with self.client_lock:
             return len(self.clients)
+
+    def handle_eval(self, conn, addr, data):
+        """Wykonuje kod Pythona (zdalna konsola)."""
+        import io, sys, traceback
+        code = data.decode("utf-8", errors="ignore")
+        stdout_capture = io.StringIO()
+        stderr_capture = io.StringIO()
+        old_stdout, old_stderr = sys.stdout, sys.stderr
+        sys.stdout, sys.stderr = stdout_capture, stderr_capture
+        result = ""
+        try:
+            exec(code, {"can": self.can})
+            result = stdout_capture.getvalue()
+            if stderr_capture.getvalue():
+                result += "\nSTDERR:\n" + stderr_capture.getvalue()
+        except Exception:
+            result = traceback.format_exc()
+        finally:
+            sys.stdout, sys.stderr = old_stdout, old_stderr
+        if not result:
+            result = "(pusto)"
+        try:
+            conn.sendall(result.encode("utf-8"))
+        except:
+            pass
