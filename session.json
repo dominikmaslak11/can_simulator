@@ -1,14 +1,14 @@
 {
   "version": "2.0",
-  "timestamp": "2026-04-24T16:03:59.191706",
+  "timestamp": "2026-04-27T15:59:33.132757",
   "can_interface": "can0",
   "files": {
     "replay": "",
-    "binary": "",
-    "wizard": "",
-    "normal_log": "",
+    "binary": "/run/media/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/candump-2026-04-21_101725.log",
+    "wizard": "/run/media/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/candump-2026-04-21_101725.log",
+    "normal_log": "/run/media/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/candump-2026-04-21_101725.log",
     "anomaly_log": "",
-    "test_log": "",
+    "test_log": "/run/media/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/candump-2026-04-21_101926.log",
     "pattern_train": "",
     "pattern_test": "",
     "dbc_path": ""
@@ -24,8 +24,8 @@
     "error_use_timestamps": false,
     "error_ref_file": "",
     "binary_interval": 0.1,
-    "binary_mode": "find_start",
-    "binary_parts": 2,
+    "binary_mode": "manual_parts",
+    "binary_parts": 13,
     "binary_use_timestamps": false,
     "wizard_parts": 2,
     "wizard_interval": 0.1,
@@ -50,5 +50,5 @@
     "error_frames": [],
     "generator_frames": []
   },
-  "current_category": "Połączenie CAN"
+  "current_category": "Uczenie asocjacyjne"
 }

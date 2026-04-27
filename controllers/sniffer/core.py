@@ -159,3 +159,10 @@ class CoreMethods:
                     break
 
         self.app.sniffer_status.set(f"Podświetlono {count} ramek.")
+
+
+    def set_highlighted_ids(self, ids):
+        """Ustawia listę ID do podświetlenia (iterable)."""
+        self.highlighted_ids = set(ids)
+        self.refresh_treeview()
+

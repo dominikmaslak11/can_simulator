@@ -15,11 +15,13 @@ from gui.tabs.bridge_tab import setup_bridge_tab
 from gui.tabs.recording_tab import setup_recording_tab
 from gui.tabs.console_tab import ConsoleWidget
 from gui.tabs.ecu_tab import EcuTab
+from gui.tabs.associative_tab import AssociativeTab
 from gui.utils import write_log_to_file
 from controllers import (
     CanController, ReplayController, MissingController, ErrorController,
     StepController, ManualController, BinaryController, WizardController, SnifferController
 )
+from controllers.associative_controller import AssociativeController
 
 logger = logging.getLogger("App")
 
@@ -77,6 +79,7 @@ class CanSimulatorApp:
         self.binary_ctrl = BinaryController(self)
         self.wizard_ctrl = WizardController(self)
         self.sniffer_ctrl = SnifferController(self)
+        self.associative_ctrl = AssociativeController(self)
 
         # Rejestr artefaktów
         self.discovered_artifacts = {}
@@ -171,6 +174,7 @@ class CanSimulatorApp:
             ("Sieć i zdalny dostęp", self._create_network_frame),
             ("Makra", self._create_macro_frame),
             ("DBC Manager", self._create_dbc_frame),
+            ("Uczenie asocjacyjne", self._create_associative_frame),
         ]
 
         for idx, (cat_name, setup_func) in enumerate(categories):
@@ -494,6 +498,11 @@ class CanSimulatorApp:
         tab_macro.pack(fill=tk.BOTH, expand=True)
         macro_tab.setup_macro_tab(self, tab_macro)
 
+
+    def _create_associative_frame(self, parent):
+        self.associative_tab = AssociativeTab(self, parent)
+        self.associative_tab.pack(fill=tk.BOTH, expand=True)
+
     def _create_dbc_frame(self, parent):
         tab_dbc = ttk.Frame(parent)
         tab_dbc.pack(fill=tk.BOTH, expand=True)
@@ -508,6 +517,7 @@ class CanSimulatorApp:
         self.root.bind('<Control-l>', lambda e: self.sniffer_ctrl.clear_sniffer())
         self.root.bind('<Control-s>', lambda e: self.export_project())
         self.root.bind('<Control-o>', lambda e: self.import_project())
+        self.root.bind('<Control-h>', lambda e: self.associative_tab.toggle_event())
         # Można dodać więcej skrótów według potrzeb
 
     

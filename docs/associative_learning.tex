@@ -1,0 +1,181 @@
+\documentclass[a4paper,12pt]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{enumitem}
+\usepackage{tcolorbox}
+\usepackage{float}
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue,
+    filecolor=magenta,
+    urlcolor=cyan,
+    pdftitle={Interaktywne uczenie asocjacyjne magistrali CAN},
+    pdfauthor={CAN Simulator GUI},
+    pdfsubject={Dokumentacja funkcji uczenia asocjacyjnego online},
+    pdfkeywords={CAN, SocketCAN, nauczanie maszynowe, etykietowanie, interaktywne}
+}
+
+\lstset{
+    basicstyle=\ttfamily\small,
+    backgroundcolor=\color{gray!10},
+    frame=single,
+    breaklines=true,
+    showstringspaces=false,
+    language=Python,
+    morekeywords={self,import,from,class,def,if,else,elif,for,while,return,True,False,None},
+}
+
+\title{Interaktywne uczenie asocjacyjne magistrali CAN\\Dokumentacja techniczna}
+\author{Zespół CAN Simulator GUI}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+\tableofcontents
+\newpage
+
+\section{Wprowadzenie}
+Interaktywne uczenie asocjacyjne (ang.\ \emph{Interactive Associative Learning}) to nowa funkcja aplikacji CAN Simulator GUI umożliwiająca szybką identyfikację ramek CAN odpowiedzialnych za konkretne zjawisko fizyczne (np.\ włączenie świateł stopu, naciśnięcie pedału hamulca, otwarcie drzwi).
+
+W przeciwieństwie do tradycyjnych metod (wyszukiwanie binarne, analiza logów \emph{post mortem}), użytkownik wskazuje momenty występowania zdarzenia w czasie rzeczywistym, a aplikacja automatycznie – na podstawie wielokrotnych obserwacji – wskazuje najbardziej prawdopodobną ramkę lub sekwencję ramek.
+
+\section{Zasada działania}
+\begin{enumerate}[noitemsep]
+    \item \textbf{Tryb uczenia} – Użytkownik włącza tryb ,,Asocjacja CAN'' (zakładka \texttt{Uczenie asocjacyjne}).
+    \item \textbf{Buforyzacja} – Aplikacja nasłuchuje ramek i przechowuje w buforze kołowym ostatnich $N$ sekund (domyślnie 10~s). Każda ramka zachowuje znacznik czasu, identyfikator, dane i flagę rozszerzonego ID.
+    \item \textbf{Etykietowanie}:
+        \begin{itemize}
+            \item Gdy użytkownik \textbf{wciśnie} checkbox ,,Zdarzenie'' (lub klawisz \texttt{Ctrl+H}), rejestrowany jest czas $t_{\text{start}}$.
+            \item Gdy użytkownik \textbf{puści} checkbox, rejestrowany jest czas $t_{\text{stop}}$.
+            \item Ramki w przedziale $[t_{\text{start}}-\Delta t,\; t_{\text{stop}}+\Delta t]$ oznaczane są jako \textbf{pozytywne} (związane ze zdarzeniem). Pozostałe ramki w buforze to próbki negatywne.
+        \end{itemize}
+    \item \textbf{Analiza}:
+        \begin{itemize}
+            \item \emph{Heurystyka bajtowa} – dla każdego identyfikatora CAN i każdego bajtu sprawdzane jest, czy wartość bajtu jest stała w próbkach negatywnych, a zmienia się podczas zdarzenia. Jeśli tak, bajt i jego wartość stają się kandydatem.
+            \item \emph{Klasyfikator online} (opcjonalny) – model \texttt{PassiveAggressiveClassifier} ze \texttt{scikit-learn} trenowany przyrostowo (\texttt{partial\_fit}) na każdej nowej próbce. Cechy wejściowe: ID, flaga extended, DLC oraz wartości 8 bajtów danych.
+        \end{itemize}
+    \item \textbf{Wynik} – lista kandydatów szeregowana malejąco według \emph{pewności} (średnia z heurystyki i modelu). Gdy pewność przekroczy próg (domyślnie 80\%), ramka jest uznawana za zidentyfikowaną.
+    \item \textbf{Podświetlanie w Snifferze} – zidentyfikowane ramki są zaznaczane na żółto w zakładce ,,Sniffer CAN'', co ułatwia dalszą obserwację.
+\end{enumerate}
+
+\section{Interfejs użytkownika}
+
+\subsection{Zakładka \texttt{Uczenie asocjacyjne}}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{|l|p{10cm}|}
+\hline
+\textbf{Element} & \textbf{Opis} \\
+\hline
+Checkbox ,,Zdarzenie'' & Przełącza stan zdarzenia (wciśnięty – rozpoczęcie, puszczony – zakończenie). Dostępny również globalnie przez \texttt{Ctrl+H}. \\
+\hline
+Przycisk ,,Start uczenia'' & Rozpoczyna buforowanie ramek i nasłuchiwanie. Wymaga aktywnego połączenia CAN. \\
+\hline
+Przycisk ,,Stop uczenia'' & Zatrzymuje buforowanie i analizę. \\
+\hline
+Przycisk ,,Wyczyść dane'' & Resetuje wszystkie zebrane dane, iteracje i tabelę wyników. \\
+\hline
+Tolerancja czasowa & Pole wyboru $\pm$X~ms – margines dodawany do okna zdarzenia (domyślnie $\pm200$~ms). \\
+\hline
+Tabela wyników & Kolumny: \texttt{CAN ID}, \texttt{Bajt}, \texttt{Wartość (zdarzenie)}, \texttt{Wartość (tło)}, \texttt{Pewność (\%)}. \\
+\hline
+Pasek postępu & Wizualizacja liczby zebranych iteracji (cel: 10). \\
+\hline
+Podgląd bufora & Wyświetla ostatnie 50 ramek z bufora w czasie rzeczywistym. \\
+\hline
+\end{tabular}
+\caption{Elementy interfejsu zakładki \texttt{Uczenie asocjacyjne}.}
+\end{table}
+
+\subsection{Skróty klawiszowe}
+\begin{itemize}[noitemsep]
+    \item \texttt{Ctrl+H} – przełączenie stanu zdarzenia (działa globalnie, również gdy zakładka nie jest aktywna).
+\end{itemize}
+
+\section{Architektura}
+
+\subsection{Struktura plików}
+\begin{verbatim}
+controllers/associative_controller.py   # Główna logika (bufor, etykietowanie, analiza, model)
+gui/tabs/associative_tab.py             # Interfejs użytkownika (Tkinter)
+tests/test_associative.py               # Testy integracyjne z vcan0
+docs/associative_learning.tex           # Niniejszy dokument
+\end{verbatim}
+
+\subsection{Komponenty w \texttt{AssociativeController}}
+\begin{itemize}[noitemsep]
+    \item \texttt{CircularBuffer} – lista ramek z automatycznym usuwaniem starszych niż \texttt{max\_age} sekund.
+    \item \texttt{toggle\_event()} – rozpoczyna/kończy zdarzenie; po zakończeniu wywołuje \texttt{\_label\_frames()} i \texttt{\_analyze()}.
+    \item \texttt{\_extract\_features(rec)} – zamienia rekord ramki na wektor liczbowy dla klasyfikatora.
+    \item \texttt{\_update\_classifier(pos, neg)} – uczy model \texttt{PassiveAggressiveClassifier} na bieżących danych.
+    \item \texttt{get\_highlight\_ids(threshold)} – zwraca listę ID do podświetlenia w Snifferze.
+\end{itemize}
+
+\section{Testy}
+
+\subsection{Test integracyjny}
+Plik \texttt{tests/test\_associative.py} zawiera przypadki testowe:
+\begin{enumerate}[noitemsep]
+    \item \texttt{test\_event\_toggle\_counts\_iteration} – weryfikuje, czy przełączanie zdarzenia zwiększa licznik iteracji.
+    \item \texttt{test\_buffer\_fills\_with\_messages} – wysyła ramki na \texttt{vcan0} i sprawdza, czy trafiają do bufora.
+    \item \texttt{test\_labeling\_after\_event} – sprawdza oznaczenie ramek po zakończeniu zdarzenia.
+    \item \texttt{test\_candidates\_generated} – symuluje zdarzenie z dedykowaną ramką i weryfikuje, że jest ona wysoko w rankingu kandydatów.
+\end{enumerate}
+
+\subsection{Uruchomienie testów}
+\begin{lstlisting}[language=bash]
+# Aktywuj wirtualne środowisko
+source .venv/bin/activate
+
+# Uruchom testy
+python3 -m pytest tests/test_associative.py -v
+\end{lstlisting}
+
+\section{Konfiguracja}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{|l|l|l|}
+\hline
+\textbf{Parametr} & \textbf{Domyślnie} & \textbf{Opis} \\
+\hline
+\texttt{max\_age} & 10.0 & Maksymalny wiek ramki w buforze (sekundy) \\
+\hline
+\texttt{tolerance\_ms} & 200 & Margines tolerancji okna zdarzenia (ms) \\
+\hline
+\texttt{threshold} & 80.0 & Próg pewności do podświetlania (\%) \\
+\hline
+\end{tabular}
+\caption{Parametry konfiguracyjne w \texttt{AssociativeController}.}
+\end{table}
+
+\section{Znane ograniczenia}
+
+\begin{enumerate}[noitemsep]
+    \item \textbf{Synchronizacja czasu} – opóźnienie między fizycznym zdarzeniem a reakcją użytkownika może wpływać na dokładność. Rozwiązaniem jest zwiększenie tolerancji czasowej.
+    \item \textbf{Wielokrotne ID dla jednego zdarzenia} – system zwraca wszystkie korelujące ID, ale nie rozstrzyga, które są bezpośrednią przyczyną.
+    \item \textbf{Szum danych} – ramki cykliczne o zmiennej wartości (RPM, prędkość) mogą być błędnie wskazywane jako kandydaci przy małej liczbie iteracji. Więcej iteracji redukuje ten efekt.
+    \item \textbf{Klasyfikator online} – wymaga \texttt{scikit-learn}. Jeśli biblioteka nie jest dostępna, system działa wyłącznie na heurystyce bajtowej.
+\end{enumerate}
+
+\section{Przyszłe rozszerzenia}
+\begin{itemize}[noitemsep]
+    \item Filtrowanie wstępne – automatyczne odrzucanie ID o stałej częstotliwości i niewielkiej zmienności.
+    \item Analiza sekwencji – wykrywanie ciągu ramek poprzedzających zdarzenie.
+    \item Eksport wzorca – zapis znalezionej ramki/reguły do formatu umożliwiającego późniejszą automatyczną detekcję.
+    \item Tryb pasywny – możliwość oznaczania zdarzeń na podstawie zewnętrznego sygnału (np.\ zmiana wartości konkretnej ramki).
+\end{itemize}
+
+\section{Podsumowanie}
+Funkcja interaktywnego uczenia asocjacyjnego stanowi praktyczne narzędzie diagnostyczne, pozwalające w kilka minut zidentyfikować nieznane ramki CAN odpowiedzialne za obserwowane zjawisko fizyczne. Dzięki integracji ze Snifferem i opcjonalnemu klasyfikatorowi online, proces identyfikacji jest szybki i intuicyjny.
+
+\end{document}
