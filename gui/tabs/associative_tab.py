@@ -36,6 +36,10 @@ class AssociativeTab(ttk.Frame):
                                     command=self.clear_data)
         self.btn_clear.pack(side=tk.LEFT, padx=5)
 
+        self.btn_export = ttk.Button(ctrl_frame, text="Eksportuj wzorzec",
+                                      command=self.export_pattern)
+        self.btn_export.pack(side=tk.LEFT, padx=5)
+
         # Checkbox zdarzenia
         self.check_var = tk.BooleanVar()
         self.checkbox = ttk.Checkbutton(ctrl_frame, text="Zdarzenie (np. Hamulec)",
@@ -172,6 +176,26 @@ class AssociativeTab(ttk.Frame):
                 except Exception:
                     pass
             self.after(2000, self.update_sniffer_highlight)
+
+
+    def export_pattern(self):
+        """Eksportuje najlepszy wzorzec do pliku JSON."""
+        if not self.controller or not self.controller.get_best_candidate():
+            messagebox.showwarning("Brak danych", "Nie znaleziono jeszcze żadnego wzorca.")
+            return
+        from tkinter import filedialog
+        filepath = filedialog.asksaveasfilename(
+            defaultextension=".json",
+            filetypes=[("JSON", "*.json")],
+            title="Zapisz wzorzec asocjacyjny"
+        )
+        if not filepath:
+            return
+        try:
+            self.controller.export_pattern(filepath)
+            self.app.log(f"[Assoc] Wzorzec wyeksportowany do {filepath}")
+        except Exception as e:
+            messagebox.showerror("Błąd eksportu", str(e))
 
     def _refresh_loop(self):
         """Odświeża podgląd bufora co 500 ms."""
