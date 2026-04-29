@@ -36,6 +36,11 @@ class AssociativeController:
 
         if SKLEARN_AVAILABLE:
             self.classifier = PassiveAggressiveClassifier(warm_start=True, random_state=42)
+        # Tryb wartościowy
+        self.value_history = []          # lista zatwierdzonych wartości (float)
+        self.value_timestamps = []       # odpowiadające im timestampy
+        self.value_labels = []           # etykiety dla bufora (słownik timestamp->wartość)
+
 
     def start(self):
         if self.running:
@@ -147,6 +152,82 @@ class AssociativeController:
             return True
         return False
 
+
+    def _analyze_value_correlation(self):
+        """Analizuje korelację między wartościami bajtów a wartością referencyjną."""
+        if len(self.value_history) < 3:
+            return []   # za mało danych
+
+        candidates = []
+        margin = self.tolerance_ms / 1000.0
+
+        # Dla każdego unikalnego ID w buforze
+        for arb_id in set(rec["arb_id"] for _, rec in self.buffer):
+            # Zbierz próbki: dla każdej zarejestrowanej wartości znajdź średnią bajtu w oknie
+            byte_samples = {i: [] for i in range(8)}
+            ref_values = []
+
+            for ref_ts, ref_val in zip(self.value_timestamps, self.value_history):
+                frame_slice = [rec for ts, rec in self.buffer
+                               if rec["arb_id"] == arb_id
+                               and (ref_ts - margin) <= ts <= (ref_ts + margin)]
+                if not frame_slice:
+                    continue
+                # Dla każdego bajtu weź średnią z okna
+                avg_data = [0] * 8
+                for rec in frame_slice:
+                    for i, b in enumerate(rec["data"]):
+                        avg_data[i] += b
+                for i in range(8):
+                    avg_data[i] /= len(frame_slice)
+                for i in range(8):
+                    byte_samples[i].append(avg_data[i])
+                ref_values.append(ref_val)
+
+            if len(ref_values) < 3:
+                continue
+
+            # Oblicz korelację Pearsona dla każdego bajtu
+            for byte_idx in range(8):
+                x = ref_values
+                y = byte_samples[byte_idx]
+                if len(set(y)) < 2:   # bajt się nie zmienia
+                    continue
+                r = self._pearson_correlation(x, y)
+                if r is None:
+                    continue
+                abs_r = abs(r)
+                if abs_r >= 0.8:   # próg korelacji
+                    candidates.append({
+                        "id": arb_id,
+                        "byte": byte_idx,
+                        "value": round(np.mean(y)),
+                        "background": None,
+                        "pos_count": len(x),
+                        "neg_count": 0,
+                        "confidence": round(abs_r * 100, 1),
+                        "source": "wartosc" if not self.iteration_count else "wartosc"
+                    })
+
+        candidates.sort(key=lambda c: c["confidence"], reverse=True)
+        return candidates
+
+    @staticmethod
+    def _pearson_correlation(x, y):
+        """Oblicza współczynnik korelacji Pearsona."""
+        n = len(x)
+        if n < 3:
+            return None
+        import math
+        mean_x = sum(x) / n
+        mean_y = sum(y) / n
+        num = sum((x[i] - mean_x) * (y[i] - mean_y) for i in range(n))
+        den_x = math.sqrt(sum((xi - mean_x) ** 2 for xi in x))
+        den_y = math.sqrt(sum((yi - mean_y) ** 2 for yi in y))
+        if den_x == 0 or den_y == 0:
+            return None
+        return num / (den_x * den_y)
+
     def _analyze(self):
         pos_frames = self.last_labeled["positive"]
         neg_frames = self.last_labeled["negative"]
@@ -213,6 +294,10 @@ class AssociativeController:
                 except Exception:
                     pass
 
+                # Dodaj wyniki z trybu wartościowego
+        wartosciowi = self._analyze_value_correlation()
+        candidates.extend(wartosciowi)
+
         candidates.sort(key=lambda x: x["confidence"], reverse=True)
         self.candidates = candidates
         logger.info("Analiza zakończona (Faza 7): %d kandydatów", len(candidates))
@@ -244,6 +329,34 @@ class AssociativeController:
             json.dump(pattern, f, indent=2)
         logger.info(f"Wzorzec zapisany do {filepath}")
         return pattern
+
+
+    def commit_value(self, value: float):
+        """Rejestruje wartość referencyjną z bieżącym timestampem."""
+        now = time.time()
+        self.value_history.append(value)
+        self.value_timestamps.append(now)
+        # Oznacz ramki w buforze w oknie tolerancji
+        margin = self.tolerance_ms / 1000.0
+        for ts, rec in self.buffer:
+            if (now - margin) <= ts <= (now + margin):
+                rec_id = id(rec)
+                self.value_labels.append((ts, rec, value))
+        logger.info(f"Zarejestrowano wartość {value} (historia: {len(self.value_history)})")
+
+    def undo_last_value(self):
+        """Usuwa ostatnią zatwierdzoną wartość."""
+        if not self.value_history:
+            return
+        removed = self.value_history.pop()
+        self.value_timestamps.pop()
+        # Usuń odpowiadające etykiety
+        cutoff = self.value_timestamps[-1] if self.value_timestamps else 0
+        self.value_labels = [(ts, rec, v) for ts, rec, v in self.value_labels if ts <= cutoff]
+        logger.info(f"Cofnięto wartość {removed}")
+
+    def get_value_history(self):
+        return list(self.value_history)
 
     def get_highlight_ids(self, threshold=80.0):
         ids = []

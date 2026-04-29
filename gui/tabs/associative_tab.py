@@ -57,19 +57,76 @@ class AssociativeTab(ttk.Frame):
                                           command=self.update_tolerance)
         self.tolerance_spin.pack(side=tk.LEFT, padx=5)
 
+        # --- Tryb wartościowy ---
+        value_frame = ttk.LabelFrame(frame, text="Tryb wartościowy (np. temperatura)", padding=5)
+        value_frame.pack(fill=tk.X, pady=10)
+
+        val_entry_frame = ttk.Frame(value_frame)
+        val_entry_frame.pack(fill=tk.X, pady=2)
+        ttk.Label(val_entry_frame, text="Wartość referencyjna:").pack(side=tk.LEFT)
+        self.value_var = tk.StringVar()
+        self.value_entry = ttk.Entry(val_entry_frame, textvariable=self.value_var, width=10)
+        self.value_entry.pack(side=tk.LEFT, padx=5)
+        self.value_entry.bind("<Return>", self.commit_value)
+        self.btn_commit_value = ttk.Button(val_entry_frame, text="Zatwierdź",
+                                           command=self.commit_value)
+        self.btn_commit_value.pack(side=tk.LEFT, padx=5)
+
+        # Historia wartości
+        hist_frame = ttk.Frame(value_frame)
+        hist_frame.pack(fill=tk.X, pady=2)
+        ttk.Label(hist_frame, text="Historia:").pack(side=tk.LEFT)
+        self.history_var = tk.StringVar(value="(pusta)")
+        ttk.Label(hist_frame, textvariable=self.history_var, foreground="gray").pack(side=tk.LEFT, padx=5)
+        self.btn_undo_value = ttk.Button(hist_frame, text="Cofnij ostatnią",
+                                         command=self.undo_last_value)
+        self.btn_undo_value.pack(side=tk.RIGHT, padx=5)
+
+        # Nazwa zmiennej
+        name_frame = ttk.Frame(value_frame)
+        name_frame.pack(fill=tk.X, pady=2)
+        ttk.Label(name_frame, text="Nazwa zmiennej:").pack(side=tk.LEFT)
+        self.variable_name_var = tk.StringVar(value="")
+        ttk.Entry(name_frame, textvariable=self.variable_name_var, width=20).pack(side=tk.LEFT, padx=5)
+
+        # Typ zależności
+        type_frame = ttk.Frame(value_frame)
+        type_frame.pack(fill=tk.X, pady=2)
+        ttk.Label(type_frame, text="Typ zależności:").pack(side=tk.LEFT)
+        self.correlation_type_var = tk.StringVar(value="linear")
+        ttk.Radiobutton(type_frame, text="Liniowa", variable=self.correlation_type_var,
+                        value="linear").pack(side=tk.LEFT, padx=5)
+        ttk.Radiobutton(type_frame, text="Dowolna zmiana", variable=self.correlation_type_var,
+                        value="any_change").pack(side=tk.LEFT, padx=5)
+
+        # Filtr źródła
+        filter_frame = ttk.Frame(value_frame)
+        filter_frame.pack(fill=tk.X, pady=2)
+        self.filter_var = tk.StringVar(value="all")
+        ttk.Radiobutton(filter_frame, text="Wszystkie", variable=self.filter_var,
+                        value="all", command=self._update_candidates_table).pack(side=tk.LEFT, padx=5)
+        ttk.Radiobutton(filter_frame, text="Tylko zdarzenia", variable=self.filter_var,
+                        value="zdarzenie", command=self._update_candidates_table).pack(side=tk.LEFT, padx=5)
+        ttk.Radiobutton(filter_frame, text="Tylko wartości", variable=self.filter_var,
+                        value="wartosc", command=self._update_candidates_table).pack(side=tk.LEFT, padx=5)
+
+
+
         # Tabela wyników (nowe kolumny: Bajt, Wartość, Tło)
-        columns = ("id", "byte", "value", "background", "confidence")
+        columns = ("id", "byte", "value", "background", "confidence", "source")
         self.tree = ttk.Treeview(frame, columns=columns, show="headings", height=8)
         self.tree.heading("id", text="CAN ID")
         self.tree.heading("byte", text="Bajt")
         self.tree.heading("value", text="Wartość (zdarzenie)")
         self.tree.heading("background", text="Wartość (tło)")
         self.tree.heading("confidence", text="Pewność (%)")
+        self.tree.heading("source", text="Źródło")
         self.tree.column("id", width=80)
         self.tree.column("byte", width=50)
         self.tree.column("value", width=120)
         self.tree.column("background", width=100)
         self.tree.column("confidence", width=80)
+        self.tree.column("source", width=100)
         self.tree.pack(fill=tk.BOTH, expand=True, pady=10)
 
         scrollbar = ttk.Scrollbar(frame, orient=tk.VERTICAL, command=self.tree.yview)
@@ -156,12 +213,14 @@ class AssociativeTab(ttk.Frame):
             self.tree.delete(item)
         for c in candidates:
             bg = f"0x{c['background']:02X}" if c['background'] is not None else "brak"
+            src = c.get("source", "zdarzenie")
             self.tree.insert("", "end", values=(
                 f"0x{c['id']:X}",
                 c['byte'],
                 f"0x{c['value']:02X}",
                 bg,
-                f"{c['confidence']:.1f}"
+                f"{c['confidence']:.1f}",
+                src
             ))
 
 
@@ -196,6 +255,42 @@ class AssociativeTab(ttk.Frame):
             self.app.log(f"[Assoc] Wzorzec wyeksportowany do {filepath}")
         except Exception as e:
             messagebox.showerror("Błąd eksportu", str(e))
+
+
+    def commit_value(self, event=None):
+        """Zatwierdza wartość referencyjną i przekazuje do kontrolera."""
+        if not self.controller or not self.controller.running:
+            messagebox.showwarning("Uwaga", "Najpierw rozpocznij uczenie.")
+            return
+        val_str = self.value_var.get().strip()
+        if not val_str:
+            return
+        try:
+            val = float(val_str)
+        except ValueError:
+            messagebox.showerror("Błąd", "Wartość musi być liczbą.")
+            return
+        self.controller.commit_value(val)
+        self.value_var.set("")
+        self.app.log(f"[Assoc] Zatwierdzono wartość referencyjną: {val}")
+        # Aktualizuj historię
+        self._update_value_history()
+
+    def undo_last_value(self):
+        """Cofa ostatnią zatwierdzoną wartość."""
+        if self.controller:
+            self.controller.undo_last_value()
+            self._update_value_history()
+            self.app.log("[Assoc] Cofnięto ostatnią wartość referencyjną.")
+
+    def _update_value_history(self):
+        """Odświeża etykietę historii wartości."""
+        if self.controller:
+            vals = self.controller.get_value_history()
+            if vals:
+                self.history_var.set(" → ".join(str(v) for v in vals[-5:]))
+            else:
+                self.history_var.set("(pusta)")
 
     def _refresh_loop(self):
         """Odświeża podgląd bufora co 500 ms."""

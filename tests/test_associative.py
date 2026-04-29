@@ -127,3 +127,27 @@ class TestAssociativeIntegration(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+    def test_value_correlation(self):
+        """Test trybu wartościowego – korelacja liniowa."""
+        import can as can_lib
+        bus = can_lib.interface.Bus(channel='vcan0', bustype='socketcan')
+        # Symulacja: temperatura rośnie, bajt 2 rośnie proporcjonalnie
+        for temp in range(20, 30):
+            byte_val = temp + 30   # bajt 2 = temp + 30
+            msg = can_lib.Message(arbitration_id=0x300, data=[0x00, 0x00, byte_val, 0x00],
+                                  is_extended_id=False)
+            bus.send(msg)
+            time.sleep(0.05)
+            # Zatwierdź wartość referencyjną
+            self.controller.commit_value(float(temp))
+            time.sleep(0.05)
+
+        # Wymuś analizę
+        self.controller._analyze()
+        candidates = self.controller.get_candidates()
+        # Powinien być kandydat dla ID 0x300, bajt 2
+        matching = [c for c in candidates if c['id'] == 0x300 and c['byte'] == 2]
+        self.assertTrue(len(matching) > 0, "Nie znaleziono korelacji dla ID 0x300 bajt 2")
+        bus.shutdown()
+
