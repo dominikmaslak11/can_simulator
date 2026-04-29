@@ -151,3 +151,27 @@ if __name__ == '__main__':
         self.assertTrue(len(matching) > 0, "Nie znaleziono korelacji dla ID 0x300 bajt 2")
         bus.shutdown()
 
+    def test_sequence_detection(self):
+        """Test wykrywania sekwencji: ID_B -> ID_A -> ID_C."""
+        import can as can_lib
+        bus = can_lib.interface.Bus(channel='vcan0', bustype='socketcan')
+        # Główna ramka 0x400, poprzedzająca 0x300, następująca 0x500
+        for i in range(5):
+            # Sekwencja przed
+            bus.send(can_lib.Message(arbitration_id=0x300, data=[0x01], is_extended_id=False))
+            time.sleep(0.01)
+            # Główna
+            bus.send(can_lib.Message(arbitration_id=0x400, data=[0x02], is_extended_id=False))
+            time.sleep(0.01)
+            # Sekwencja po
+            bus.send(can_lib.Message(arbitration_id=0x500, data=[0x03], is_extended_id=False))
+            time.sleep(0.05)
+
+        # Wprowadź główny kandydat
+        self.controller.candidates = [{"id": 0x400, "byte": 0, "confidence": 95, "source": "zdarzenie"}]
+        seqs = self.controller.find_sequences(self.controller.candidates[0])
+        self.assertTrue(len(seqs) > 0)
+        self.assertIn(0x300, seqs[0]["ids_order"])
+        self.assertIn(0x500, seqs[0]["ids_order"])
+        bus.shutdown()
+

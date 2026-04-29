@@ -175,6 +175,19 @@ python3 -m pytest tests/test_associative.py -v
     \item Tryb pasywny – możliwość oznaczania zdarzeń na podstawie zewnętrznego sygnału (np.\ zmiana wartości konkretnej ramki).
 \end{itemize}
 
+
+\section{Wykrywanie sekwencji asocjacyjnych (Faza 9)}
+Po zidentyfikowaniu głównej ramki (np. ID świateł stopu), użytkownik może kliknąć przycisk \texttt{Szukaj sekwencji}. Algorytm analizuje sąsiedztwo czasowe każdego wystąpienia ramki w buforze:
+
+\begin{itemize}[noitemsep]
+    \item Przeszukuje okno $\pm 0.5$ s wokół każdego wystąpienia głównego ID.
+    \item Zlicza wystąpienia sąsiednich ID i ich kierunek (przed / po).
+    \item Filtruje te, które występują w przynajmniej 80\% okien.
+    \item Sortuje je według średnich odstępów czasu, tworząc uporządkowaną listę ID.
+\end{itemize}
+
+Wynik wyświetlany jest w kolumnie \texttt{Sekwencja} tabeli wyników. Wszystkie ID należące do sekwencji są podświetlane w Snifferze.
+
 \section{Podsumowanie}
 Funkcja interaktywnego uczenia asocjacyjnego stanowi praktyczne narzędzie diagnostyczne, pozwalające w kilka minut zidentyfikować nieznane ramki CAN odpowiedzialne za obserwowane zjawisko fizyczne. Dzięki integracji ze Snifferem i opcjonalnemu klasyfikatorowi online, proces identyfikacji jest szybki i intuicyjny.
 

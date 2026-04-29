@@ -40,6 +40,10 @@ class AssociativeTab(ttk.Frame):
                                       command=self.export_pattern)
         self.btn_export.pack(side=tk.LEFT, padx=5)
 
+        self.btn_sequence = ttk.Button(ctrl_frame, text="Szukaj sekwencji",
+                                        command=self.search_sequence)
+        self.btn_sequence.pack(side=tk.LEFT, padx=5)
+
         # Checkbox zdarzenia
         self.check_var = tk.BooleanVar()
         self.checkbox = ttk.Checkbutton(ctrl_frame, text="Zdarzenie (np. Hamulec)",
@@ -113,7 +117,7 @@ class AssociativeTab(ttk.Frame):
 
 
         # Tabela wyników (nowe kolumny: Bajt, Wartość, Tło)
-        columns = ("id", "byte", "value", "background", "confidence", "source")
+        columns = ("id", "byte", "value", "background", "confidence", "source", "sequence")
         self.tree = ttk.Treeview(frame, columns=columns, show="headings", height=8)
         self.tree.heading("id", text="CAN ID")
         self.tree.heading("byte", text="Bajt")
@@ -121,12 +125,14 @@ class AssociativeTab(ttk.Frame):
         self.tree.heading("background", text="Wartość (tło)")
         self.tree.heading("confidence", text="Pewność (%)")
         self.tree.heading("source", text="Źródło")
+        self.tree.heading("sequence", text="Sekwencja")
         self.tree.column("id", width=80)
         self.tree.column("byte", width=50)
         self.tree.column("value", width=120)
         self.tree.column("background", width=100)
         self.tree.column("confidence", width=80)
         self.tree.column("source", width=100)
+        self.tree.column("sequence", width=150)
         self.tree.pack(fill=tk.BOTH, expand=True, pady=10)
 
         scrollbar = ttk.Scrollbar(frame, orient=tk.VERTICAL, command=self.tree.yview)
@@ -291,6 +297,41 @@ class AssociativeTab(ttk.Frame):
                 self.history_var.set(" → ".join(str(v) for v in vals[-5:]))
             else:
                 self.history_var.set("(pusta)")
+
+
+    def search_sequence(self):
+        """Uruchamia wyszukiwanie sekwencji na podstawie najlepszego kandydata."""
+        if not self.controller or not self.controller.running:
+            messagebox.showwarning("Uwaga", "Najpierw rozpocznij uczenie.")
+            return
+        best = self.controller.get_best_candidate()
+        if not best:
+            messagebox.showinfo("Brak", "Nie znaleziono jeszcze głównego kandydata do sekwencji.")
+            return
+        sequences = self.controller.find_sequences(best, tolerance_ms=self.tolerance_var.get())
+        if sequences:
+            self._update_candidates_table_with_sequences(sequences)
+            self.app.log(f"[Assoc] Znaleziono {len(sequences)} sekwencję(e).")
+        else:
+            self.app.log("[Assoc] Nie znaleziono żadnej powtarzalnej sekwencji.")
+
+    def _update_candidates_table_with_sequences(self, sequences):
+        """Wypełnia tabelę sekwencjami (zastępuje bieżącą zawartość)."""
+        for item in self.tree.get_children():
+            self.tree.delete(item)
+        for seq in sequences:
+            main_id = seq.get("main_id", "")
+            main_byte = seq.get("main_byte", "")
+            seq_str = " -> ".join(seq.get("ids_order", []))
+            self.tree.insert("", "end", values=(
+                f"0x{main_id:X}" if isinstance(main_id, int) else str(main_id),
+                main_byte,
+                "sekw.",
+                "-",
+                f"{seq.get('confidence', 0):.1f}",
+                "sekwencja",
+                seq_str
+            ))
 
     def _refresh_loop(self):
         """Odświeża podgląd bufora co 500 ms."""
