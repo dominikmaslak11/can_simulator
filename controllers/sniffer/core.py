@@ -166,3 +166,9 @@ class CoreMethods:
         self.highlighted_ids = set(ids)
         self.refresh_treeview()
 
+
+
+    def toggle_j1939_view(self):
+        """Callback dla checkboxa J1939 View."""
+        # Logika może być pusta – ważne, żeby metoda istniała
+        pass

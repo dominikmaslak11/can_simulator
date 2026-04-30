@@ -1,0 +1,43 @@
+\documentclass[a4paper,12pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{hyperref}
+\usepackage{listings}
+\usepackage{xcolor}
+\hypersetup{colorlinks=true}
+\title{Asocjacja J1939\\Rozszerzenie uczenia asocjacyjnego CAN Simulator GUI}
+\author{Zespół CAN Simulator GUI}
+\date{\today}
+
+\begin{document}
+\maketitle
+\tableofcontents
+
+\section{Wprowadzenie}
+Od Fazy~14 aplikacja CAN Simulator GUI obsługuje uczenie asocjacyjne w protokole SAE~J1939. Nowy kontroler \texttt{J1939AssociativeController} dziedziczy wszystkie możliwości analityczne (zdarzenia, wartości, sekwencje, klasyfikator online) i automatycznie wzbogaca wyniki o metadane J1939: numer grupy parametrów (PGN), nazwę PGN (z wbudowanej bazy) oraz adres źródłowy (Source Address).
+
+\section{Nowe funkcje}
+\begin{itemize}
+    \item \textbf{Przełącznik trybu magistrali} – w zakładce ,,Uczenie asocjacyjne'' pojawiły się przyciski radiowe \texttt{CAN 2.0} oraz \texttt{J1939}.
+    \item \textbf{Wyniki z nazwami PGN} – tabela kandydatów w trybie J1939 wyświetla dodatkowe kolumny: PGN (z nazwą), adres źródłowy.
+    \item \textbf{Eksport wzorca v2} – plik JSON zawiera teraz pełne dane J1939 (format\_version=2).
+    \item \textbf{Wyszukiwanie sekwencji w J1939} – algorytm uwzględnia nazwy PGN przy prezentacji sekwencji.
+\end{itemize}
+
+\section{Testy}
+Testy jednostkowe i integracyjne znajdują się w pliku \texttt{tests/test\_j1939\_associative.py}. Wymagają one wirtualnej magistrali \texttt{vcan0}.
+
+\section{Użycie}
+\begin{enumerate}
+    \item Uruchom aplikację, podłącz interfejs CAN (np. \texttt{vcan0}).
+    \item Przejdź do zakładki ,,Uczenie asocjacyjne''.
+    \item Wybierz tryb \textbf{J1939}.
+    \item Rozpocznij uczenie (przycisk \texttt{Start}).
+    \item Zaznaczaj zdarzenia lub wpisuj wartości referencyjne – wyniki natychmiast pokażą PGN i adres źródłowy.
+\end{enumerate}
+
+\section{Podsumowanie}
+Integracja J1939 z uczeniem asocjacyjnym przekształca CAN Simulator GUI w potężne narzędzie do analizy magistrali w pojazdach ciężarowych, maszynach rolniczych i autobusach. Automatyczne mapowanie surowych identyfikatorów na nazwy parametrów znacząco skraca czas diagnostyki.
+
+\end{document}

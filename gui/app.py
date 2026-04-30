@@ -16,6 +16,7 @@ from gui.tabs.recording_tab import setup_recording_tab
 from gui.tabs.console_tab import ConsoleWidget
 from gui.tabs.ecu_tab import EcuTab
 from gui.tabs.associative_tab import AssociativeTab
+from gui.tabs.j1939_tab import J1939Tab
 from gui.utils import write_log_to_file
 from controllers import (
     CanController, ReplayController, MissingController, ErrorController,
@@ -175,6 +176,7 @@ class CanSimulatorApp:
             ("Makra", self._create_macro_frame),
             ("DBC Manager", self._create_dbc_frame),
             ("Uczenie asocjacyjne", self._create_associative_frame),
+            ("Protokoły", self._create_protocols_frame),
         ]
 
         for idx, (cat_name, setup_func) in enumerate(categories):
@@ -498,6 +500,15 @@ class CanSimulatorApp:
         tab_macro.pack(fill=tk.BOTH, expand=True)
         macro_tab.setup_macro_tab(self, tab_macro)
 
+
+
+    def _create_protocols_frame(self, parent):
+        notebook = ttk.Notebook(parent)
+        notebook.pack(fill=tk.BOTH, expand=True)
+        tab_j1939 = ttk.Frame(notebook)
+        notebook.add(tab_j1939, text="J1939 Browser")
+        self.j1939_tab = J1939Tab(self, tab_j1939)
+        self.j1939_tab.pack(fill=tk.BOTH, expand=True)
 
     def _create_associative_frame(self, parent):
         self.associative_tab = AssociativeTab(self, parent)

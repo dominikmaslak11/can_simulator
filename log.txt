@@ -1,46 +1,21 @@
 ┌──(nz2xzhkzfeewkgbu㉿y5enjsya4t4pv4fn)-[/run/…/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator]
-└─$ sudo ./fix_F11c_syntax.sh
-=== Naprawa składni w associative_controller.py ===
-Nie znaleziono błędnego fragmentu – być może już poprawiony.
-Zapisano zmiany.
-  File "controllers/associative_controller.py", line 534
-    f.write("
-            ^
-SyntaxError: unterminated string literal (detected at line 534)
-  controller BŁĄD
-
-=== Naprawa zakończona ===
-Możesz teraz ponownie uruchomić ./run.sh
-
-┌──(nz2xzhkzfeewkgbu㉿y5enjsya4t4pv4fn)-[/run/…/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator]
 └─$ sudo ./run.sh
-2026-04-30 18:35:05,758 [INFO] CANSimulator - === CAN Simulator GUI ===
-2026-04-30 18:35:05,759 [INFO] CANSimulator - Czas: 2026-04-30 18:35:05.758998, Python: 3.13.12 (main, Feb  4 2026, 15:06:39) [GCC 15.2.0]
-2026-04-30 18:35:06,300 [INFO] numexpr.utils - NumExpr defaulting to 12 threads.
-2026-04-30 18:35:07,080 [DEBUG] matplotlib - matplotlib data path: /run/media/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator/venv/lib/python3.13/site-packages/matplotlib/mpl-data
-2026-04-30 18:35:07,083 [DEBUG] matplotlib - CONFIGDIR=/root/.config/matplotlib
-2026-04-30 18:35:07,085 [DEBUG] matplotlib - interactive is False
-2026-04-30 18:35:07,085 [DEBUG] matplotlib - platform is linux
-2026-04-30 18:35:07,096 [DEBUG] matplotlib - CACHEDIR=/root/.cache/matplotlib
-2026-04-30 18:35:07,104 [DEBUG] matplotlib.font_manager - Using fontManager instance from /root/.cache/matplotlib/fontlist-v390.json
-2026-04-30 18:35:07,255 [DEBUG] canmatrix.formats - ldf is not supported
-2026-04-30 18:35:07,262 [DEBUG] canmatrix.formats - xls is not supported
-2026-04-30 18:35:07,263 [DEBUG] canmatrix.formats - xlsx is not supported
-2026-04-30 18:35:07,263 [DEBUG] canmatrix.formats - yaml is not supported
-2026-04-30 18:35:07,263 [DEBUG] canmatrix.formats - eds is not supported
-2026-04-30 18:35:07,589 [CRITICAL] CANSimulator - Import error
+2026-04-30 20:16:49,341 [INFO] CANSimulator - === CAN Simulator GUI ===
+2026-04-30 20:16:49,341 [INFO] CANSimulator - Czas: 2026-04-30 20:16:49.341707, Python: 3.13.12 (main, Feb  4 2026, 15:06:39) [GCC 15.2.0]
+2026-04-30 20:16:49,888 [INFO] numexpr.utils - NumExpr defaulting to 12 threads.
+2026-04-30 20:16:50,625 [CRITICAL] CANSimulator - Import error
 Traceback (most recent call last):
   File "/run/media/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator/main.py", line 29, in <module>
     from gui.app import CanSimulatorApp
   File "/run/media/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator/gui/__init__.py", line 1, in <module>
     from .app import CanSimulatorApp
-  File "/run/media/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator/gui/app.py", line 18, in <module>
-    from gui.tabs.associative_tab import AssociativeTab
-  File "/run/media/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator/gui/tabs/associative_tab.py", line 5, in <module>
-    from controllers.associative_controller import AssociativeController
-  File "/run/media/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator/controllers/associative_controller.py", line 534
-    f.write("
-            ^
-SyntaxError: unterminated string literal (detected at line 534)
+  File "/run/media/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator/gui/app.py", line 10, in <module>
+    from gui.tabs import replay_tab, missing_tab, error_tab, step_tab, manual_tab, binary_tab, wizard_tab, sniffer_tab, chart_tab, ml_analysis_tab, pattern_tab, server_tab, generator_tab, macro_tab, advanced_ml_tab
+  File "/run/media/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator/gui/tabs/__init__.py", line 8, in <module>
+    from . import sniffer_tab
+  File "/run/media/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator/gui/tabs/sniffer_tab.py", line 111
+    app.sniffer_j1939_var = j1939_var
+IndentationError: unexpected indent
 
 ┌──(nz2xzhkzfeewkgbu㉿y5enjsya4t4pv4fn)-[/run/…/nz2xzhkzfeewkgbu/0C1A2332389DB1AF/magistralaCAN/can_simulator]
+└─$

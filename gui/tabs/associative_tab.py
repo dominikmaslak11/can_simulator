@@ -3,6 +3,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 
 from controllers.associative_controller import AssociativeController
+from controllers.j1939_associative_controller import J1939AssociativeController
 
 
 class AssociativeTab(ttk.Frame):
@@ -10,6 +11,7 @@ class AssociativeTab(ttk.Frame):
         super().__init__(parent, **kwargs)
         self.app = app
         self.controller = None
+        self.bus_mode_var = tk.StringVar(value="can")
         self.create_widgets()
 
     def create_widgets(self):
@@ -19,6 +21,15 @@ class AssociativeTab(ttk.Frame):
         # Nagłówek
         ttk.Label(frame, text="Interaktywne uczenie asocjacyjne",
                   font=('Arial', 12, 'bold')).pack(anchor=tk.W, pady=(0,10))
+
+        # --- Tryb magistrali (CAN / J1939) ---
+        mode_frame = ttk.LabelFrame(frame, text="Tryb magistrali", padding=5)
+        mode_frame.pack(fill=tk.X, pady=5)
+        ttk.Radiobutton(mode_frame, text="CAN 2.0 (11/29-bit)", variable=self.bus_mode_var,
+                        value="can", command=self.on_bus_mode_changed).pack(side=tk.LEFT, padx=5)
+        ttk.Radiobutton(mode_frame, text="J1939", variable=self.bus_mode_var,
+                        value="j1939", command=self.on_bus_mode_changed).pack(side=tk.LEFT, padx=5)
+
 
         # Sterowanie
         ctrl_frame = ttk.Frame(frame)
@@ -162,6 +173,25 @@ class AssociativeTab(ttk.Frame):
         self.buffer_list.pack(fill=tk.BOTH, expand=True)
 
     # ---- Logika ----
+
+    def on_bus_mode_changed(self):
+        """Reaguje na zmianę trybu CAN / J1939."""
+        mode = self.bus_mode_var.get()
+        self.app.log(f"[Assoc] Przełączono tryb magistrali: {mode}")
+        # Zatrzymaj obecny kontroler, jeśli działa
+        if self.controller and self.controller.running:
+            self.controller.stop()
+        # Utwórz nowy kontroler odpowiedniego typu
+        if mode == "j1939":
+            self.controller = J1939AssociativeController(self.app)
+        else:
+            self.controller = AssociativeController(self.app)
+        self.controller.set_tolerance(self.tolerance_var.get())
+        # Jeśli uczenie było włączone, uruchom ponownie
+        if self.btn_start['state'] == 'disabled':
+            self.controller.start()
+        self.app.log(f"[Assoc] Używany kontroler: {type(self.controller).__name__}")
+
     def start_learning(self):
         if not self.app.can.connected:
             messagebox.showerror("Błąd", "Połącz się z CAN przed rozpoczęciem uczenia.")
@@ -187,6 +217,7 @@ class AssociativeTab(ttk.Frame):
         if self.controller:
             self.controller.stop()
         self.controller = None
+        self.bus_mode_var = tk.StringVar(value="can")
         for item in self.tree.get_children():
             self.tree.delete(item)
         self.buffer_list.delete(0, tk.END)
@@ -224,21 +255,40 @@ class AssociativeTab(ttk.Frame):
         candidates = self.controller.get_candidates()
         for item in self.tree.get_children():
             self.tree.delete(item)
+        mode = self.bus_mode_var.get() if hasattr(self, 'bus_mode_var') else "can"
         for c in candidates:
             bg = f"0x{c['background']:02X}" if c['background'] is not None else "brak"
             src = c.get("source", "zdarzenie")
             seq_str = c.get("ids_order", "")
             if isinstance(seq_str, list):
                 seq_str = " -> ".join(str(i) for i in seq_str)
-            self.tree.insert("", "end", values=(
-                f"0x{c['id']:X}",
-                c['byte'],
-                f"0x{c['value']:02X}",
-                bg,
-                f"{c['confidence']:.1f}",
-                src,
-                seq_str
-            ))
+            if mode == "j1939":
+                pgn = c.get("pgn", "")
+                pgn_name = c.get("pgn_name", "")
+                pgn_display = f"0x{pgn:04X}" if isinstance(pgn, int) else str(pgn)
+                if pgn_name:
+                    pgn_display += f" ({pgn_name})"
+                self.tree.insert("", "end", values=(
+                    pgn_display,
+                    f"0x{c['id']:X}",
+                    c.get("source_address", ""),
+                    c['byte'],
+                    f"0x{c['value']:02X}",
+                    bg,
+                    f"{c['confidence']:.1f}",
+                    src,
+                    seq_str
+                ))
+            else:
+                self.tree.insert("", "end", values=(
+                    f"0x{c['id']:X}",
+                    c['byte'],
+                    f"0x{c['value']:02X}",
+                    bg,
+                    f"{c['confidence']:.1f}",
+                    src,
+                    seq_str
+                ))
 
 
     def update_sniffer_highlight(self):

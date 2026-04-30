@@ -1,0 +1,5 @@
+\contentsline {section}{\numberline {1}Wprowadzenie}{1}{section.1}%
+\contentsline {section}{\numberline {2}Nowe funkcje}{1}{section.2}%
+\contentsline {section}{\numberline {3}Testy}{2}{section.3}%
+\contentsline {section}{\numberline {4}Użycie}{2}{section.4}%
+\contentsline {section}{\numberline {5}Podsumowanie}{2}{section.5}%

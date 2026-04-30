@@ -18,16 +18,18 @@ def setup_sniffer_tab(app, tab):
     stop_btn.pack(side=tk.LEFT, padx=2)
     clear_btn = ttk.Button(toolbar, text="Wyczyść", command=app.sniffer_ctrl.clear_sniffer)
     clear_btn.pack(side=tk.LEFT, padx=2)
-    export_btn = ttk.Button(toolbar, text="Eksportuj (log)", command=app.sniffer_ctrl.export_sniffer)
-    export_btn.pack(side=tk.LEFT, padx=2)
-    export_csv_btn = ttk.Button(toolbar, text="Eksportuj do CSV", command=app.sniffer_ctrl.export_csv)
-    export_asc_btn = ttk.Button(toolbar, text="Eksportuj do ASC", command=app.sniffer_ctrl.export_asc)
-    export_parquet_btn = ttk.Button(toolbar, text="Eksportuj do Parquet", command=app.sniffer_ctrl.export_parquet)
-    export_mdf4_btn = ttk.Button(toolbar, text="Eksportuj do MDF4", command=app.sniffer_ctrl.export_mdf4)
-    export_mdf4_btn.pack(side=tk.LEFT, padx=2)
-    export_parquet_btn.pack(side=tk.LEFT, padx=2)
-    export_asc_btn.pack(side=tk.LEFT, padx=2)
-    export_csv_btn.pack(side=tk.LEFT, padx=2)
+            
+
+    # Menu Eksportuj
+    export_menu_btn = ttk.Menubutton(toolbar, text="Eksportuj")
+    export_menu = tk.Menu(export_menu_btn, tearoff=0)
+    export_menu.add_command(label="Eksportuj (log)", command=app.sniffer_ctrl.export_sniffer)
+    export_menu.add_command(label="Eksportuj do CSV", command=app.sniffer_ctrl.export_csv)
+    export_menu.add_command(label="Eksportuj do ASC", command=app.sniffer_ctrl.export_asc)
+    export_menu.add_command(label="Eksportuj do Parquet", command=app.sniffer_ctrl.export_parquet)
+    export_menu.add_command(label="Eksportuj do MDF4", command=app.sniffer_ctrl.export_mdf4)
+    export_menu_btn["menu"] = export_menu
+    export_menu_btn.pack(side=tk.LEFT, padx=2)
 
     filter_var = tk.BooleanVar(value=False)
     ttk.Checkbutton(toolbar, text="Filtruj ID", variable=filter_var,
@@ -48,13 +50,22 @@ def setup_sniffer_tab(app, tab):
     ttk.Checkbutton(toolbar, text="Widok bitowy", variable=bit_view_var,
                     command=app.sniffer_ctrl.toggle_bit_view).pack(side=tk.LEFT, padx=5)
 
-    dbc_load_btn = ttk.Button(toolbar, text="Wczytaj DBC", command=app.sniffer_ctrl.load_dbc_file)
-    dbc_edit_btn = ttk.Button(toolbar, text="Edytor DBC", command=app.sniffer_ctrl.open_dbc_editor)
-    dbc_edit_btn.pack(side=tk.LEFT, padx=2)
-    dbc_load_btn.pack(side=tk.LEFT, padx=5)
+    j1939_var = tk.BooleanVar(value=False)
+    ttk.Checkbutton(toolbar, text="J1939 View", variable=j1939_var,
+                    command=lambda: app.sniffer_ctrl.toggle_j1939_view()).pack(side=tk.LEFT, padx=5)
+
+    
+    # Menu DBC
+    dbc_menu_btn = ttk.Menubutton(toolbar, text="DBC")
+    dbc_menu = tk.Menu(dbc_menu_btn, tearoff=0)
+    dbc_menu.add_command(label="Wczytaj DBC", command=app.sniffer_ctrl.load_dbc_file)
+    dbc_menu.add_command(label="Edytor DBC", command=app.sniffer_ctrl.open_dbc_editor)
+    dbc_menu_btn["menu"] = dbc_menu
+    dbc_menu_btn.pack(side=tk.LEFT, padx=2)
     dbc_status_label = ttk.Label(toolbar, text="Brak DBC")
     dbc_status_label.pack(side=tk.LEFT, padx=2)
 
+    
     # Tabela ramek
     tree_frame = ttk.Frame(frame)
     tree_frame.pack(fill=tk.BOTH, expand=True)
@@ -98,6 +109,7 @@ def setup_sniffer_tab(app, tab):
     app.sniffer_keep_alive_var = keep_alive_var
     app.sniffer_overwrite_var = overwrite_var
     app.sniffer_bit_view_var = bit_view_var
+    app.sniffer_j1939_var = j1939_var
     app.sniffer_dbc_status = dbc_status_label
     app.sniffer_columns_normal = columns_normal
     app.sniffer_columns_bit = columns_bit

@@ -1,0 +1,23 @@
+\documentclass[a4paper,12pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{hyperref}
+\title{Wsparcie J1939 w CAN Simulator GUI}
+\author{Zespół CAN Simulator GUI}
+\date{\today}
+\begin{document}
+\maketitle
+\section{Wprowadzenie}
+Od wersji z Faza 12 CAN Simulator GUI obsługuje protokół SAE J1939. Nowy parser identyfikatorów 29-bitowych pozwala na dekompozycję identyfikatora na PGN (Parameter Group Number), priorytet oraz adres źródłowy (Source Address).
+
+\section{Funkcje}
+\begin{itemize}
+    \item \textbf{Biblioteka PGN} – wbudowana baza popularnych PGN (ponad 50 wpisów) w pliku \texttt{j1939\_pgn\_definitions.json}.
+    \item \textbf{J1939 Browser} – nowa zakładka w kategorii „Protokoły” wyświetlająca ramki J1939 z nazwami PGN.
+    \item \textbf{Filtrowanie} – możliwość filtrowania po numerze PGN (szesnastkowo).
+    \item \textbf{Integracja ze Snifferem} – opcjonalny widok kolumn PGN, Source Address i Priority w głównym Snifferze (checkbox „J1939 View”).
+\end{itemize}
+\section{Testy}
+Testy jednostkowe parsera znajdują się w \texttt{tests/test\_j1939.py}.
+\end{document}
