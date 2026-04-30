@@ -517,7 +517,11 @@ class CanSimulatorApp:
         self.root.bind('<Control-l>', lambda e: self.sniffer_ctrl.clear_sniffer())
         self.root.bind('<Control-s>', lambda e: self.export_project())
         self.root.bind('<Control-o>', lambda e: self.import_project())
+        # Uczenie asocjacyjne – skróty globalne
         self.root.bind('<Control-h>', lambda e: self.associative_tab.toggle_event())
+        self.root.bind('<Control-Shift-V>', lambda e: self.associative_tab.commit_value())
+        self.root.bind('<Control-Shift-Z>', lambda e: self.associative_tab.undo_last_value())
+        self.root.bind('<Control-Shift-S>', lambda e: self.associative_tab.search_sequence())
         # Można dodać więcej skrótów według potrzeb
 
     

@@ -1,3 +1,13 @@
+#!/bin/bash
+# fix_F11_final.sh – Ostateczna naprawa błędów składniowych i optymalizacyjnych (Faza 11)
+# Uruchom w katalogu can_simulator/
+
+set -e
+
+echo "=== Ostateczna naprawa błędów (Faza 11) ==="
+
+# ---------- 1. Poprawiony controllers/associative_controller.py ----------
+cat > controllers/associative_controller.py << 'CONTROLLER_EOF'
 """Kontroler interaktywnego uczenia asocjacyjnego – Faza 11."""
 import threading
 import time
@@ -478,3 +488,52 @@ class AssociativeController:
             json.dump(pattern, f, indent=2)
         logger.info(f"Wzorzec zapisany do {filepath}")
         return pattern
+CONTROLLER_EOF
+echo "controllers/associative_controller.py – poprawiony"
+
+# ---------- 2. Poprawka gui/tabs/associative_tab.py (kolumna sekwencji) ----------
+python3 << 'PYEOF'
+with open("gui/tabs/associative_tab.py", "r") as f:
+    content = f.read()
+
+# Poprawiamy _update_candidates_table – dodajemy pustą sekwencję na końcu
+old_insert = '''            self.tree.insert("", "end", values=(
+                f"0x{c['id']:X}",
+                c['byte'],
+                f"0x{c['value']:02X}",
+                bg,
+                f"{c['confidence']:.1f}",
+                src
+            ))'''
+
+new_insert = '''            seq_str = c.get("ids_order", "")
+            if isinstance(seq_str, list):
+                seq_str = " -> ".join(str(i) for i in seq_str)
+            self.tree.insert("", "end", values=(
+                f"0x{c['id']:X}",
+                c['byte'],
+                f"0x{c['value']:02X}",
+                bg,
+                f"{c['confidence']:.1f}",
+                src,
+                seq_str
+            ))'''
+
+if old_insert in content:
+    content = content.replace(old_insert, new_insert)
+    with open("gui/tabs/associative_tab.py", "w") as f:
+        f.write(content)
+    print("Poprawiono _update_candidates_table – dodano kolumnę 'Sekwencja'.")
+else:
+    print("Nie znaleziono starej wersji _update_candidates_table (może już poprawiona).")
+PYEOF
+
+# ---------- 3. Sprawdzenie składni ----------
+echo ""
+echo "Sprawdzanie składni:"
+python3 -m py_compile controllers/associative_controller.py && echo "  controller OK" || echo "  controller BŁĄD"
+python3 -m py_compile gui/tabs/associative_tab.py && echo "  tab OK" || echo "  tab BŁĄD"
+
+echo ""
+echo "=== Ostateczna naprawa zakończona ==="
+echo "Możesz teraz uruchomić ./run.sh"

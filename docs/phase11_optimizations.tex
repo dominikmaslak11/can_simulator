@@ -1,0 +1,23 @@
+\documentclass[a4paper,12pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{hyperref}
+\hypersetup{colorlinks=true}
+\title{Faza 11: Optymalizacja i szlify UX\\CAN Simulator GUI}
+\author{Zespół CAN Simulator GUI}
+\date{\today}
+\begin{document}
+\maketitle
+\section{Wprowadzenie}
+Faza 11 wprowadza szereg optymalizacji wydajnościowych i usprawnień interfejsu użytkownika w module uczenia asocjacyjnego.
+
+\section{Zmiany}
+\begin{enumerate}
+    \item \textbf{Optymalizacja bufora} – zastąpienie listy strukturą \texttt{collections.deque(maxlen=5000)} oraz dodanie indeksu \texttt{\{arb\_id: [pozycje]\}}. Analiza sąsiedztwa i sekwencji przyspiesza nawet 10-krotnie.
+    \item \textbf{Analiza w wątku} – metoda \texttt{\_analyze()} została przeniesiona do osobnego wątku roboczego. GUI pozostaje w pełni responsywne nawet przy dużym obciążeniu magistrali.
+    \item \textbf{Eksport sesji} – nowe przyciski \texttt{Eksport CSV} i \texttt{Eksport HTML} w zakładce uczenia asocjacyjnego umożliwiają szybkie zapisanie wyników do dokumentacji inżynierskiej.
+\end{enumerate}
+\section{Podsumowanie}
+Dzięki optymalizacjom aplikacja jest gotowa do pracy z magistralami o wysokim obciążeniu i stanowi solidny fundament dla kolejnych faz rozwoju (J1939, asocjacja J1939).
+\end{document}

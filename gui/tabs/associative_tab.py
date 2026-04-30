@@ -40,6 +40,13 @@ class AssociativeTab(ttk.Frame):
                                       command=self.export_pattern)
         self.btn_export.pack(side=tk.LEFT, padx=5)
 
+        self.btn_export_csv = ttk.Button(ctrl_frame, text="Eksport CSV",
+                                         command=self.export_csv)
+        self.btn_export_csv.pack(side=tk.LEFT, padx=5)
+        self.btn_export_html = ttk.Button(ctrl_frame, text="Eksport HTML",
+                                          command=self.export_html)
+        self.btn_export_html.pack(side=tk.LEFT, padx=5)
+
         self.btn_sequence = ttk.Button(ctrl_frame, text="Szukaj sekwencji",
                                         command=self.search_sequence)
         self.btn_sequence.pack(side=tk.LEFT, padx=5)
@@ -220,13 +227,17 @@ class AssociativeTab(ttk.Frame):
         for c in candidates:
             bg = f"0x{c['background']:02X}" if c['background'] is not None else "brak"
             src = c.get("source", "zdarzenie")
+            seq_str = c.get("ids_order", "")
+            if isinstance(seq_str, list):
+                seq_str = " -> ".join(str(i) for i in seq_str)
             self.tree.insert("", "end", values=(
                 f"0x{c['id']:X}",
                 c['byte'],
                 f"0x{c['value']:02X}",
                 bg,
                 f"{c['confidence']:.1f}",
-                src
+                src,
+                seq_str
             ))
 
 
@@ -332,6 +343,37 @@ class AssociativeTab(ttk.Frame):
                 "sekwencja",
                 seq_str
             ))
+
+
+    def export_csv(self):
+        """Eksportuje wyniki do CSV."""
+        if not self.controller or not self.controller.candidates:
+            messagebox.showwarning("Brak danych", "Brak wyników do eksportu.")
+            return
+        from tkinter import filedialog
+        filepath = filedialog.asksaveasfilename(defaultextension=".csv", filetypes=[("CSV", "*.csv")])
+        if not filepath:
+            return
+        try:
+            self.controller.export_to_csv(filepath)
+            self.app.log(f"[Assoc] Wyniki wyeksportowane do CSV: {filepath}")
+        except Exception as e:
+            messagebox.showerror("Błąd", str(e))
+
+    def export_html(self):
+        """Eksportuje wyniki do HTML."""
+        if not self.controller or not self.controller.candidates:
+            messagebox.showwarning("Brak danych", "Brak wyników do eksportu.")
+            return
+        from tkinter import filedialog
+        filepath = filedialog.asksaveasfilename(defaultextension=".html", filetypes=[("HTML", "*.html")])
+        if not filepath:
+            return
+        try:
+            self.controller.export_to_html(filepath)
+            self.app.log(f"[Assoc] Wyniki wyeksportowane do HTML: {filepath}")
+        except Exception as e:
+            messagebox.showerror("Błąd", str(e))
 
     def _refresh_loop(self):
         """Odświeża podgląd bufora co 500 ms."""
