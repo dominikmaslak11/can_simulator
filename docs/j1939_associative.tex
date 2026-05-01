@@ -1,0 +1,45 @@
+\documentclass[a4paper,12pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\hypersetup{colorlinks=true}
+\title{Asocjacja J1939 w CAN Simulator GUI}
+\author{Zespół CAN Simulator GUI}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\section{Wprowadzenie}
+Od Fazy 14 CAN Simulator GUI łączy interaktywne uczenie asocjacyjne z protokołem SAE J1939. Użytkownik może teraz wskazać zdarzenie lub wartość referencyjną, a algorytm analizuje ramki J1939 na poziomie \textbf{PGN} (Parameter Group Number), \textbf{adresu źródłowego} i konkretnego \textbf{bajtu}.
+
+\section{Działanie}
+\begin{enumerate}[noitemsep]
+    \item W zakładce \texttt{Uczenie asocjacyjne} wybierz tryb \textbf{J1939} (radiobutton).
+    \item Rozpocznij uczenie i oznaczaj zdarzenia (checkbox) lub wprowadzaj wartości referencyjne (np. temperatura).
+    \item Algorytm analizuje tylko ramki 29-bitowe (J1939), automatycznie wyodrębnia PGN i adres źródłowy.
+    \item Wyniki w tabeli pokazują: \textbf{PGN (nazwa)}, \textbf{ID}, \textbf{Source Address}, \textbf{Bajt}, \textbf{Wartość}, \textbf{Pewność}.
+    \item Eksport wzorca (JSON v2) zawiera pełne metadane J1939.
+\end{enumerate}
+
+\section{Komponenty}
+\begin{itemize}[noitemsep]
+    \item \texttt{controllers/j1939\_associative\_controller.py} – dziedziczy po \texttt{AssociativeController}, nadpisuje analizę i dodaje pola J1939.
+    \item \texttt{parsers\_j1939.py} – dekompozycja 29-bit ID na PGN, priorytet i adres źródłowy.
+    \item \texttt{j1939\_pgn\_definitions.json} – wbudowana baza nazw PGN (ponad 70 wpisów).
+\end{itemize}
+
+\section{Testy}
+Testy integracyjne znajdują się w \texttt{tests/test\_j1939\_associative.py}. Uruchomienie:
+\begin{verbatim}
+python3 -m pytest tests/test_j1939_associative.py -v
+\end{verbatim}
+
+\section{Ograniczenia}
+\begin{itemize}[noitemsep]
+    \item Analizowane są wyłącznie ramki z rozszerzonym identyfikatorem (29-bit).
+    \item Protokół transportowy J1939 (wieloramkowy) nie jest jeszcze obsługiwany.
+\end{itemize}
+\end{document}
